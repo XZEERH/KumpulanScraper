@@ -7,7 +7,9 @@
  * Source : https://whatsapp.com/channel/0029VbCN4sQLo4hhDCkOHX1m
  * Base web : https://hivedetect.ai
  * Type : Scraper
- * Description : 
+ * Description : intinya analisa gambar kalian apakah dari ai slop atau enggak dengan beberapa model yang tersedia, cocok untuk analisa web apakah slop ai atau enggak.
+ * Note : form-data hanya dipakai sebagai fallback node <18. pada node 18+ script otomatis memakai FormData/Blob bawaan. Btw error fix sendiri.
+ */
 
 const fs = require('fs');
 const path = require('path');
