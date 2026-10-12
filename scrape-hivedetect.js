@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 
+/**
+ * Name : hivedetect.ai (berfungsi menganalisa ai slop lewat upload image).
+ * Owner : Razeerh
+ * Source : https://whatsapp.com/channel/0029VbCN4sQLo4hhDCkOHX1m
+ * Base web : https://hivedetect.ai
+ * Type : Scraper
+ * Description : 
+
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
