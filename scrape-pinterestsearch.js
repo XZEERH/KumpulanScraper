@@ -6,7 +6,7 @@
  * Source : https://whatsapp.com/channel/0029vbCN4sQLo4hhDCk0HX1m
  * Base Web : https://www.pinterest.com
  * Type : CJS
- * Description : Lengkap banget jir dari gambar, video dan gif, gw udah dari untuk gambar result nya sampai 50, kalo video sampai 5, kalo gif udah gw coba tapi result nya 0, mungkin pencarian gif gk ada ya wkwk.
+ * Description : Lengkap banget jir dari gambar, video dan gif, gw udah tes dari untuk gambar result nya sampai 50, kalo video sampai 5, kalo gif udah gw coba tapi result nya 0, mungkin pencarian gif gk ada ya wkwk.
  * Note : error fix sendiri
  */
 
