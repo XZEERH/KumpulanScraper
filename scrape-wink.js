@@ -1,15 +1,37 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * Name :wink.ai (enhancer image HD/Ultra HD/UHD)
+/*
+ * Name : Wink AI Image Enhancer
  * Creator : Razeerh
  * Source : https://whatsapp.com/channel/0029vbCN4sQLo4hhDCk0HX1m
- * Base Web : https://wink.ai
- * Type : scraper
- * Method : GET+POST
- * Description : Tingkatkan kualitas gambar anda dengan pilihan kualitas HD, Ultra HD dan UHD.
- * Note : error fix sendiri
+ * Base Web : https://wink.ai/image-enhancer
+ * Type ' CJS
+ * description : Tingkatkan kualitas gambar dengan Enhancer wink ai HD, Ultra HD dan UHD
+ ---------------------------------------------------------------------------
+
+ * Dua kemampuan utama:
+ *
+ *  1. SCRAPE metadata fitur Image Enhancer (mode HD / Ultra HD / AI UHD),
+ *     parameter, format, batas ukuran, proses, dll.  -> JSON
+ *     Sumber data:
+ *       - Endpoint PUBLIK  GET /api/meitu_ai/ai_type_config.json
+ *         (config algoritma asli + input_limit: format, max_size, max_edge)
+ *       - HTML SSR /image-enhancer  (JSON-LD HowTo + FAQ, heading, paragraf)
+ *       - Payload i18n Next.js (self.__next_f) dari halaman upload
+ *     Metode: Axios + Cheerio (tanpa headless browser).  TERVERIFIKASI jalan.
+ *
+ *  2. ENHANCE gambar nyata (unggah -> buat task -> polling -> unduh hasil)
+ *     memakai endpoint privat Wink.  Endpoint, method, header & payload asli
+ *     ditemukan dari reverse-engineering bundle JS klien (lihat ENDPOINTS).
+ *
+ * Note : seluruh endpoint task/enhance milik Wink WAJIB LOGIN
+ *     (cookie `__mt_access_token__` / header `Access-Token`). Tanpa sesi login
+ *     yang valid server membalas: {"code":10111,"message":"登录验证失败，请先登录"}
+ *     ("verifikasi login gagal, silakan login dulu"). Script TIDAK bisa membuat
+ *     akun sendiri, jadi mode enhance hanya berjalan bila kamu memasok sesi
+ *     login Anda (--cookie / --cookie-file / env WINK_COOKIE). Bila tidak ada,
+ *     script berhenti dengan pesan error yang jelas. Btw error fix sendiri
  */
 
 const axios = require('axios');
@@ -18,29 +40,184 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
-// jpeg-js bersifat opsional: hanya dipakai untuk analisa ketajaman JPEG.
 let jpegJs = null;
 try { jpegJs = require('jpeg-js'); } catch (_) { jpegJs = null; }
 
-// ----------------------------- konfigurasi -----------------------------
+// ===========================================================================
+// KONFIGURASI & TEMUAN ENDPOINT
+// ===========================================================================
+const BASE = 'https://wink.ai';
+const SITE = 'https://wink.ai';
+const CLIENT_ID = '1189857605';
+const API_VERSION = '1.0.0';
+
 const DEFAULTS = {
-  site: 'https://wink.ai',
-  page: 'https://wink.ai/image-enhancer',
+  page: BASE + '/image-enhancer',
+  uploadPage: BASE + '/image-enhancer/upload',
   out: 'wink-image-enhancer.json',
+  outDir: './output',
   timeout: 30000,
   retries: 3,
   maxRedirects: 5,
+  pollInterval: 3000,
+  maxWait: 300000,
   userAgent:
     'Mozilla/5.0 (Linux; Android 12; Termux) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-    'Chrome/120.0 Mobile Safari/537.36 wink-scraper/1.0',
+    'Chrome/120.0 Mobile Safari/537.36 wink-scraper/2.0',
   acceptLanguage: 'en-US,en;q=0.9',
+  countryCode: 'US',
+  clientLanguage: 'en-US',
+  clientTimezone: 'UTC',
+  gnum: 1,
 };
 
-// ----------------------------- utilitas -----------------------------
-const C = {
-  reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
-  red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', cyan: '\x1b[36m',
+// Query parameter "klien" yang wajib ada di hampir semua endpoint /api.
+// Ditemukan di bundle: {clientId:API_CLIENT_ID, version:API_VERSION, countryCode, gnum, ...}
+function clientParams(extra) {
+  return Object.assign(
+    {
+      client_id: CLIENT_ID,
+      version: API_VERSION,
+      gnum: DEFAULTS.gnum,
+      country_code: DEFAULTS.countryCode,
+      client_language: DEFAULTS.clientLanguage,
+      client_timezone: DEFAULTS.clientTimezone,
+    },
+    extra || {}
+  );
+}
+
+// ---- ENDPOINT ASLI yang ditemukan (relatif terhadap https://wink.ai) -------
+const ENDPOINTS = {
+  // PUBLIK (tanpa login) — config algoritma semua fitur + input_limit
+  aiTypeConfig: '/api/meitu_ai/ai_type_config.json?withFuncLimit=1',
+  geo: '/xapi/geo',
+  // Upload (butuh login). Multipart `media` (file) atau `media_url` (url).
+  upload: '/api/v1/upload',
+  // Tanda tangan upload Meitu (@meitu/upload SDK). app=wink type=temp
+  maatSign: '/api/file/get_maat_sign.json',
+  // Buat + kirim (deliver) grup task. Payload: {taskType, name, subtaskList:[...]}
+  createDeliveryGroup: '/api/meitu_ai_task_group/create_and_delivery.json',
+  // Alias workflow (AI Workflow). Payload: {steps:[...]}
+  workflowCreate: '/api/meitu_ai/workflow/create.json',
+  workflowDeal: '/api/meitu_ai/workflow/deal_task.json',
+  workflowDetail: '/api/meitu_ai/workflow/detail.json',
+  workflowInfo: '/api/meitu_ai/workflow/info.json',
+  // Cek status task
+  taskFeedList: '/api/meitu_ai/task_feed_list.json',
+  queryBatch: '/api/meitu_ai/query_batch.json',              // ?msgIds=a,b
+  taskGroupList: '/api/meitu_ai_task_group/task_list.json',  // ?groupIds=x
+  taskGroupQuery: '/api/meitu_ai_task_group/query_batch.json',
+  predictElapsed: '/api/meitu_ai/get_predict_elapsed.json',
+  costPreview: '/api/meitu_ai/workflow/cost_preview.json',
+  userInfo: '/api/meitu_ai/user/info.json',
 };
+
+// ---- Pemetaan mode Image Enhancer -> parameter algoritma asli --------------
+// Sumber: bundle klien, staticDefinition featureId=ImageEnhancer (materialId 630)
+//   hd      -> functionId 63090
+//   live    -> functionId 63091  (Ultra HD / 超清)
+//   enhance -> functionId 63092  (Portrait Enhance / 人像增强)
+//   aiLive  -> functionId 63093  (AI UHD / AI超清)
+//   proRepair -> 63100, aigc -> 63101, concert -> 63099
+// Dikonfirmasi silang dengan ai_type_config.json (func_id & type).
+const MODES = {
+  HD: {
+    id: 'HD',
+    name: 'HD',
+    slug: 'hd',
+    functionId: 63090,
+    functionType: 2,
+    materialId: '63001',
+    variant: 'hd',
+    targetType: 1,
+    taskType: 1,
+    beans: 2,
+    vipBeans: 1,
+    useNeedVip: 0,
+    tier: 'free',
+    extValue: '1',
+    zhName: '画质修复-高清(图片)',
+    description:
+      'Peningkatan kejernihan standar: memperjelas gambar buram, menajamkan tepi/detail, dan menaikkan resolusi rendah ke kualitas HD.',
+    resolution: {
+      input: 'Resolusi rendah–sedang; maks sisi panjang 7999 px, maks sisi pendek 7999 px, ≤30 MB.',
+      output: 'HD (kelas 720p–1080p); resolusi keluaran tidak dipatok tetap (menyesuaikan input).',
+      upscale: 'Upscale ke HD.',
+      source: 'ai_type_config input_limit + klaim halaman (upscale to HD).',
+    },
+  },
+  'Ultra HD': {
+    id: 'Ultra HD',
+    name: 'Ultra HD',
+    slug: 'ultrahd',
+    functionId: 63091,
+    functionType: 12,
+    materialId: '63011',
+    variant: 'live',
+    targetType: 2,
+    taskType: 1,
+    beans: 4,
+    vipBeans: 2,
+    useNeedVip: 0,
+    tier: 'free',
+    extValue: '2',
+    zhName: '画质修复-超清(图片)',
+    description:
+      'Restorasi + penajaman, direkomendasikan untuk peningkatan umum foto resolusi rendah hingga Ultra HD/4K.',
+    resolution: {
+      input: 'Resolusi rendah–tinggi; maks sisi panjang 7999 px, maks sisi pendek 7999 px, ≤30 MB.',
+      output: 'Ultra HD / 4K; resolusi keluaran tidak dipatok tetap (menyesuaikan input).',
+      upscale: 'Upscale hingga Ultra HD/4K.',
+      source: 'ai_type_config input_limit + klaim Meta ("upscale ... to HD or 4K").',
+    },
+  },
+  'AI UHD': {
+    id: 'AI UHD',
+    name: 'AI UHD',
+    slug: 'uhd',
+    functionId: 63093,
+    functionType: 55,
+    materialId: '63031',
+    variant: 'aiLive',
+    targetType: 4,
+    taskType: 1,
+    beans: 8,
+    vipBeans: 4,
+    useNeedVip: 1,
+    tier: 'premium',
+    extValue: '4',
+    zhName: 'AI超清(图片)',
+    description:
+      'AI UHD (AI超清): Advanced Restoration 3.0 — AI mengisi detail yang hilang, memperbesar 2–3×. Butuh VIP.',
+    resolution: {
+      input: 'Resolusi rendah; maks sisi panjang 7999 px, maks sisi pendek 7999 px, ≤30 MB.',
+      output: '≈2–3× dari input (di atas Ultra HD); resolusi keluaran tidak dipatok tetap.',
+      upscale: '2–3× (Advanced Restoration 3.0).',
+      source: 'ai_type_config input_limit + FAQ ("enlarge the image by 2–3×").',
+    },
+  },
+};
+
+const MODE_ALIASES = {
+  hd: 'HD',
+  'ultra hd': 'Ultra HD', ultrahd: 'Ultra HD', 'ultra-hd': 'Ultra HD', ultra: 'Ultra HD',
+  uhdu: 'AI UHD', uhd: 'AI UHD', aiuhd: 'AI UHD', 'ai uhd': 'AI UHD', 'ai-uhd': 'AI UHD',
+};
+
+function normalizeMode(m) {
+  if (!m) return null;
+  const key = String(m).trim().toLowerCase();
+  if (MODE_ALIASES[key]) return MODES[MODE_ALIASES[key]];
+  if (MODE_ALIASES[key.replace(/\s+/g, ' ')]) return MODES[MODE_ALIASES[key.replace(/\s+/g, ' ')]];
+  for (const id of Object.keys(MODES)) if (id.toLowerCase() === key) return MODES[id];
+  return null;
+}
+
+// ===========================================================================
+// UTILITAS
+// ===========================================================================
+const C = { reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m', red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', cyan: '\x1b[36m' };
 const bold = (s) => C.bold + s + C.reset;
 const dim = (s) => C.dim + s + C.reset;
 const green = (s) => C.green + s + C.reset;
@@ -53,16 +230,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function stripHtml(s) {
   if (!s) return '';
   return String(s)
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&gt;/g, '>')
-    .replace(/&lt;/g, '<')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&gt;/g, '>').replace(/&lt;/g, '<')
+    .replace(/\s+/g, ' ').trim();
 }
 
 function humanBytes(n) {
@@ -72,465 +243,100 @@ function humanBytes(n) {
   return (n / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
-// Ekstensi file sesuai format gambar.
 function extForFormat(fmt) {
-  return { JPEG: '.jpg', PNG: '.png', WEBP: '.webp', GIF: '.gif', BMP: '.bmp' }[fmt] || '.img';
+  return { JPEG: '.jpg', PNG: '.png', WEBP: '.webp', GIF: '.gif', BMP: '.bmp' }[fmt] || '.jpg';
 }
 
-// Nama file otomatis: wink-YYYYMMDD-HHMMSS.<ext>
-function autoImageName(fmt) {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, '0');
-  const stamp =
-    d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' +
-    p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
-  return 'wink-' + stamp + extForFormat(fmt);
+function parseJsonMaybe(x) {
+  if (typeof x === 'object' && x !== null) return x;
+  try { return JSON.parse(x); } catch (_) { return null; }
 }
 
-// Ambil objek JSON seimbang mulai dari indeks '{'.
-function extractBalanced(str, start) {
-  let depth = 0, inStr = false, esc = false;
-  for (let i = start; i < str.length; i++) {
-    const ch = str[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (ch === '\\') esc = true;
-      else if (ch === '"') inStr = false;
-    } else {
-      if (ch === '"') inStr = true;
-      else if (ch === '{') depth++;
-      else if (ch === '}') { depth--; if (depth === 0) return i + 1; }
+// ===========================================================================
+// HTTP (axios) dengan timeout + retry + validasi status
+// ===========================================================================
+function cookieHeaderFrom(opts) {
+  if (opts.cookie) return opts.cookie;
+  if (opts.cookieFile) {
+    try {
+      const raw = fs.readFileSync(opts.cookieFile, 'utf8');
+      // Terima format: file cookie hasil export, atau "k=v; k2=v2"
+      if (/^[^\s]+\t/.test(raw) || raw.includes('\t')) {
+        const parts = [];
+        for (const line of raw.split('\n')) {
+          const c = line.trim();
+          if (!c || c.startsWith('#')) continue;
+          const f = c.split('\t');
+          if (f.length >= 7) parts.push(f[5] + '=' + f[6]);
+        }
+        return parts.join('; ');
+      }
+      return raw.trim();
+    } catch (e) {
+      throw new Error('Gagal membaca --cookie-file: ' + e.message);
     }
   }
-  return -1;
+  if (process.env.WINK_COOKIE) return process.env.WINK_COOKIE;
+  return null;
 }
 
-// Cari "key":{...} lalu parse sebagai JSON.
-function extractObjectByKey(html, key) {
-  const needle = '"' + key + '":';
-  let from = 0, idx;
-  while ((idx = html.indexOf(needle, from)) !== -1) {
-    from = idx + 1;
-    let j = idx + needle.length;
-    while (j < html.length && /\s/.test(html[j])) j++;
-    if (html[j] !== '{') continue;
-    const end = extractBalanced(html, j);
-    if (end === -1) continue;
-    try { return JSON.parse(html.slice(j, end)); } catch (_) { /* coba berikutnya */ }
+function accessTokenFrom(opts) {
+  if (opts.token) return opts.token;
+  if (process.env.WINK_ACCESS_TOKEN) return process.env.WINK_ACCESS_TOKEN;
+  const ck = cookieHeaderFrom(opts);
+  if (ck) {
+    const m = ck.match(/(?:^|;\s*)__mt_access_token__=([^;]+)/) || ck.match(/(?:^|;\s*)auth_token=([^;]+)/);
+    if (m) return decodeURIComponent(m[1]);
   }
   return null;
 }
 
-// ----------------------------- HTTP -----------------------------
-async function httpGet(url, opts = {}) {
-  const retries = opts.retries !== undefined ? opts.retries : DEFAULTS.retries;
+function buildHeaders(opts) {
+  const h = {
+    'User-Agent': DEFAULTS.userAgent,
+    'Accept-Language': DEFAULTS.acceptLanguage,
+    Accept: 'application/json, text/plain, */*',
+    Origin: BASE,
+    Referer: DEFAULTS.uploadPage,
+  };
+  const cookie = cookieHeaderFrom(opts);
+  if (cookie) h.Cookie = cookie;
+  const token = accessTokenFrom(opts);
+  if (token) h['Access-Token'] = token;
+  return h;
+}
+
+async function req(method, url, { data, params, headers, responseType, timeout, retries, maxRedirects } = {}, opts = {}) {
+  const attempts = retries !== undefined ? retries : (opts.retries !== undefined ? opts.retries : DEFAULTS.retries);
   let lastErr;
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  for (let a = 0; a <= attempts; a++) {
     try {
-      return await axios.get(url, {
-        timeout: opts.timeout || DEFAULTS.timeout,
-        maxRedirects: DEFAULTS.maxRedirects,
-        responseType: opts.responseType || 'text',
+      const res = await axios({
+        method,
+        url: /^https?:\/\//.test(url) ? url : BASE + url,
+        data,
+        params,
+        headers: Object.assign(buildHeaders(opts), headers || {}),
+        responseType: responseType || 'json',
+        timeout: timeout || opts.timeout || DEFAULTS.timeout,
+        maxRedirects: maxRedirects !== undefined ? maxRedirects : DEFAULTS.maxRedirects,
         validateStatus: () => true,
-        headers: Object.assign(
-          { 'User-Agent': DEFAULTS.userAgent, 'Accept-Language': DEFAULTS.acceptLanguage },
-          opts.headers || {}
-        ),
+        transformResponse: [(d) => d], // agar bisa fallback parse manual
       });
+      return res;
     } catch (e) {
       lastErr = e;
-      if (attempt < retries) await sleep(400 * Math.pow(2, attempt));
+      const retriable = !e.response || e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT' || /timeout/i.test(e.message || '');
+      if (a < attempts && retriable) await sleep(400 * Math.pow(2, a));
+      else if (a < attempts) await sleep(400 * Math.pow(2, a));
     }
   }
   throw lastErr;
 }
 
-// ----------------------------- parsing metadata -----------------------------
-function extractJsonLd($) {
-  const blocks = [];
-  $('script[type="application/ld+json"]').each((i, el) => {
-    try { blocks.push(JSON.parse($(el).contents().text())); } catch (_) {}
-  });
-  return blocks;
-}
-
-function findFaq(blocks) {
-  const out = [];
-  const walk = (node) => {
-    if (!node || typeof node !== 'object') return;
-    if (node['@type'] === 'Question' && node.name) {
-      out.push({
-        question: stripHtml(node.name),
-        answer: node.acceptedAnswer ? stripHtml(node.acceptedAnswer.text || node.acceptedAnswer) : null,
-      });
-    }
-    const graph = node['@graph'] || node.mainEntity;
-    if (Array.isArray(graph)) graph.forEach(walk);
-  };
-  blocks.forEach(walk);
-  return out;
-}
-
-function findHowTo(blocks) {
-  const steps = [];
-  const walk = (node) => {
-    if (!node || typeof node !== 'object') return;
-    if (node['@type'] === 'HowToStep') {
-      steps.push({ step: node.position || steps.length + 1, name: stripHtml(node.name), description: stripHtml(node.text) });
-    }
-    if (Array.isArray(node.itemListElement)) node.itemListElement.forEach(walk);
-    if (Array.isArray(node['@graph'])) node['@graph'].forEach(walk);
-  };
-  blocks.forEach(walk);
-  return steps.sort((a, b) => a.step - b.step);
-}
-
-function findWebsite(blocks) {
-  const walk = (node) => {
-    if (!node || typeof node !== 'object') return null;
-    if (node['@type'] === 'WebSite') return node;
-    const g = node['@graph'];
-    if (Array.isArray(g)) for (const n of g) { const r = walk(n); if (r) return r; }
-    return null;
-  };
-  for (const b of blocks) { const r = walk(b); if (r) return r; }
-  return null;
-}
-
-function extractFeatureSections($) {
-  const sections = [];
-  const nodes = $('.pseo__feature-item');
-  if (nodes.length) {
-    nodes.each((i, el) => {
-      const title = $(el).find('h2, h3').first().text().replace(/\s+/g, ' ').trim();
-      const desc = $(el).find('p').map((j, p) => stripHtml($(p).text())).get().filter(Boolean).join(' ');
-      if (title) sections.push({ title, description: desc || null });
-    });
-  }
-  // Fallback bila struktur kelas berubah: kumpulkan h2 + paragraf berikutnya.
-  if (!sections.length) {
-    $('h2').each((i, el) => {
-      const title = $(el).text().replace(/\s+/g, ' ').trim();
-      if (!title) return;
-      const p = $(el).nextAll('p, div').find('p').first().text();
-      sections.push({ title, description: stripHtml(p) || null });
-    });
-  }
-  return sections;
-}
-
-function extractRelated($) {
-  const out = [];
-  $('a').each((i, el) => {
-    const h3 = $(el).find('h3').first();
-    const title = h3.length ? h3.text().replace(/\s+/g, ' ').trim() : '';
-    const href = $(el).attr('href');
-    if (title && href && !/^(#|mailto:|javascript:)/.test(href)) {
-      const url = href.startsWith('http') ? href : DEFAULTS.site + (href.startsWith('/') ? href : '/' + href);
-      if (!out.some((x) => x.url === url)) out.push({ title, url });
-    }
-  });
-  return out;
-}
-
-// Unescape payload Next.js (self.__next_f) => teks JSON ber-quote ganda.
-// PENTING: jangan konversi "\n" => newline; pertahankan sebagai escape JSON
-// agar string multi-baris (mis. Readme) tetap valid untuk JSON.parse.
-function unescapeNextPayload(html) {
-  return html.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-}
-
-const PRIMARY_MODES = [
-  {
-    id: 'HD',
-    name: 'HD',
-    aliases: ['hd'],
-    tier: 'free',
-    premium: false,
-    description:
-      'Peningkatan kejernihan standar: memperjelas gambar buram, menajamkan tepi/detail, dan menaikkan resolusi rendah ke kualitas HD.',
-    features: ['Penajaman (sharpening) standar', 'Peningkatan kejernihan', 'Upscale ke HD'],
-    input_resolution: 'resolusi rendah hingga sedang',
-    output_resolution: 'HD (kelas 720p–1080p)',
-    upscale_factor: null,
-    documented: false,
-    inferred: true,
-    note: 'Halaman tidak mempublikasikan angka resolusi in/out eksplisit untuk mode HD; nilai ini disimpulkan dari teks "upscale ... to HD or 4K".',
-    source: 'wink.ai/image-enhancer (meta description + konten)',
-  },
-  {
-    id: 'Ultra HD',
-    name: 'Ultra HD',
-    aliases: ['ultra hd', 'ultrahd', 'ultra-hd'],
-    tier: 'free',
-    premium: false,
-    description:
-      'Mode gratis yang direkomendasikan untuk peningkatan umum. Meningkatkan ketajaman dan menaikkan foto resolusi rendah ke kualitas Ultra HD/4K dengan tetap menjaga tampilan natural.',
-    features: ['Restorasi + penajaman', 'Upscale hingga Ultra HD/4K', 'Direkomendasikan untuk pemakaian gratis'],
-    input_resolution: 'resolusi rendah–tinggi (didukung hingga 4K)',
-    output_resolution: 'Ultra HD / 4K (kelas 3840×2160)',
-    upscale_factor: null,
-    documented: true,
-    inferred: true,
-    note: 'Status mode gratis & rekomendasi terdokumentasi di FAQ; angka resolusi output disimpulkan dari klaim "up to 4K".',
-    source: 'FAQ: "Free mode: Ultra HD is highly recommended..." + meta "upscale ... to HD or 4K"',
-  },
-  {
-    id: 'AI UHD',
-    name: 'AI UHD',
-    aliases: ['ai uhd', 'aiuhd', 'uhd', 'ai-uhd'],
-    tier: 'premium',
-    premium: true,
-    description:
-      'AI UHD Level: Advanced Restoration 3.0. AI mengisi detail gambar yang hilang, memulihkan tekstur/struktur, dan dapat memperbesar gambar 2–3× tanpa kehilangan tepi bersih.',
-    features: ['Advanced Restoration 3.0', 'AI mengisi detail yang hilang', 'Perbesar 2–3×', 'Rebuild struktur (teks, ikon, detail kecil tetap tajam)'],
-    input_resolution: 'resolusi rendah (mendukung gambar hingga 4K)',
-    output_resolution: '2–3× dari input (di atas Ultra HD)',
-    upscale_factor: '2–3x',
-    documented: true,
-    inferred: false,
-    note: 'Faktor perbesaran 2–3× terdokumentasi eksplisit di FAQ.',
-    source: 'QualityRestoration.Cards.AIUHD.Desc + FAQ "...enlarge the image by 2–3×"',
-  },
-];
-
-function normalizeMode(mode) {
-  if (!mode) return null;
-  const key = String(mode).trim().toLowerCase().replace(/\s+/g, ' ');
-  for (const m of PRIMARY_MODES) {
-    if (m.id.toLowerCase() === key) return m;
-    if (m.aliases.includes(key)) return m;
-  }
-  if (key === 'ultra' || key === 'ultra-hd') return PRIMARY_MODES[1];
-  return null;
-}
-
-function deriveSceneModes(payload) {
-  const qr = payload && payload.QualityRestoration;
-  if (!qr || !qr.Cards) return [];
-  const meta = {
-    AIUHD: { premium: true, upscale_factor: '2–3x' },
-    Anime: { premium: true }, Game: { premium: true }, PortraitEnhancement: { premium: true },
-    Concert: { premium: true }, Portrait: { premium: true }, Scenary: { premium: true },
-  };
-  return Object.keys(qr.Cards).map((k) => {
-    const c = qr.Cards[k] || {};
-    const m = meta[k] || {};
-    return {
-      id: k,
-      name: c.Title || k,
-      description: c.Desc || null,
-      premium: !!m.premium,
-      tier: m.premium ? 'premium' : 'free',
-      upscale_factor: m.upscale_factor || null,
-      source: 'payload i18n: QualityRestoration.Cards.',
-    };
-  });
-}
-
-function keysToPlan(payload, keys) {
-  const out = {};
-  for (const k of keys) if (payload[k]) out[k] = payload[k];
-  return out;
-}
-
-async function scrapeMetadata(pageUrl, opts) {
-  const url = pageUrl || DEFAULTS.page;
-  const res = await httpGet(url, { responseType: 'text', timeout: opts.timeout, retries: opts.retries });
-  const status = res.status;
-  const html = typeof res.data === 'string' ? res.data : String(res.data || '');
-
-  if (status >= 400) {
-    throw new Error('HTTP ' + status + ' saat mengambil ' + url);
-  }
-  if (!html || html.length < 500) {
-    throw new Error('Konten halaman kosong/terlalu pendek (' + html.length + ' byte) dari ' + url);
-  }
-
-  const $ = cheerio.load(html);
-  const blocks = extractJsonLd($);
-  const un = unescapeNextPayload(html);
-  const payload = {};
-
-  // Ambil namespace i18n yang relevan dari payload Next.js.
-  for (const key of [
-    'QualityRestoration', 'Home', 'CloudStorage', 'CloudQuota', 'PriorityQueue',
-    'SegmentLimit', 'BatchLimit', 'Meidou', 'VideoAssets', 'MultiDevice',
-  ]) {
-    const obj = extractObjectByKey(un, key);
-    if (obj) payload[key] = obj;
-  }
-
-  const title = $('title').first().text().trim() || null;
-  const description = $('meta[name="description"]').attr('content') || null;
-  const canonical = $('link[rel="canonical"]').attr('href') || null;
-  const ogTitle = $('meta[property="og:title"]').attr('content') || null;
-  const ogDesc = $('meta[property="og:description"]').attr('content') || null;
-
-  const website = findWebsite(blocks);
-  const faq = findFaq(blocks);
-  const processSteps = findHowTo(blocks);
-  const featureSections = extractFeatureSections($);
-  const related = extractRelated($);
-  const sceneModes = deriveSceneModes(payload);
-
-  // Batas & format (dari payload i18n, apa adanya + template).
-  const home = payload.Home || {};
-  const benefitsRows = (home.Benefits && home.Benefits.Rows) || {};
-  const planLimits = keysToPlan(benefitsRows, [
-    'CloudStorage', 'CloudQuota', 'PriorityQueue', 'SegmentLimit', 'BatchLimit', 'Meidou',
-    'VideoAssets', 'MultiDevice',
-  ]);
-
-  const templateKeys = ['ImageMaxResolution', 'ImageMaxResolutionInclusive', 'ImageMaxSize',
-    'ImageOnly', 'VideoOnly', 'SingleOnly', 'BatchOnly', 'UnsupportedFormat'];
-  const documentedTemplates = findStrings(un, templateKeys);
-  const uploadRef = findStrings(un, ['UploadRefImageDesc', 'RefImageSizeTip', 'RefImageFormatTip',
-    'RefImageAspectRatioTip', 'RefImageMinResolutionTip', 'RefImageMaxResolutionTip']);
-
-  const data = {
-    scraped_at: new Date().toISOString(),
-    source: {
-      site: DEFAULTS.site,
-      feature_page: url,
-      canonical: canonical,
-      http_status: status,
-      method: 'axios + cheerio (SSR HTML: JSON-LD + heading/paragraf + payload i18n Next.js)',
-      note: 'URL fitur resmi Image Enhancer: ' + DEFAULTS.site + '/image-enhancer',
-    },
-    feature: {
-      name: 'Wink AI Image Enhancer',
-      title: title,
-      og_title: ogTitle,
-      description: description,
-      og_description: ogDesc,
-      publisher: website && website.name ? website.name : null,
-      official_url: DEFAULTS.site + '/image-enhancer',
-      upload_url: DEFAULTS.site + '/image-enhancer/upload',
-      app_variants: {
-        product: DEFAULTS.site + '/image-enhancer/upload?variant=product',
-      },
-    },
-    modes: {
-      primary: PRIMARY_MODES,
-      scene_based: sceneModes,
-      raw_cards: (payload.QualityRestoration && payload.QualityRestoration.Cards) || null,
-      cards_title: (payload.QualityRestoration && payload.QualityRestoration.Title) || null,
-    },
-    mode_differences: buildModeDifferences(),
-    quality_settings: {
-      enhancement_strength: {
-        available: true,
-        description: 'Kekuatan enhancement dapat diatur (increase sharpness untuk gambar lembut, atau lembut untuk portrait) agar hasil natural.',
-        web_slider_supported: false,
-        web_note: findStrings(un, ['SliderNotWeb']),
-        intensity_label: findStrings(un, ['Intensity']),
-      },
-      scene_detection: {
-        available: true,
-        description: 'Deteksi adegan otomatis (portrait, konser, produk, teks) sehingga tiap jenis gambar mendapat penanganan sesuai.',
-      },
-      available_levels: PRIMARY_MODES.map((m) => m.name),
-    },
-    supported_formats: {
-      image_enhancer_documented: null,
-      note: 'Halaman Image Enhancer tidak mempublikasikan daftar format gambar secara eksplisit.',
-      documented_elsewhere: {
-        scope: 'AI Image Generator – reference image (payload i18n)',
-        formats: deriveFormats(uploadRef),
-        max_size: extractPhrase(uploadRef.UploadRefImageDesc, /up to ([\d.]+\s*[KMG]B)/i),
-        min_resolution: extractPhrase(uploadRef.RefImageMinResolutionTip, /minimum resolution of ([\d]+\s*px)/i),
-        max_resolution: extractPhrase(uploadRef.RefImageMaxResolutionTip, /maximum resolution of ([\d]+\s*px)/i),
-        aspect_ratio: extractPhrase(uploadRef.RefImageAspectRatioTip, /between ([\d:]+ and [\d:]+)/i),
-      },
-    },
-    file_limits: {
-      max_resolution: 'didukung hingga 4K (pernyataan FAQ)',
-      max_file_size: null,
-      max_file_size_note: 'Template i18n "ImageMaxSize":"Supports images up to {size}" ada, tetapi nilai size tidak dipublikasikan di halaman.',
-      documented_templates: documentedTemplates,
-    },
-    plan_limits: planLimits,
-    process: {
-      steps: processSteps,
-      summary: 'Unggah gambar -> pilih mode peningkatan (HD / Ultra HD / AI UHD atau mode skenario) -> proses -> lihat hasil -> unduh.',
-    },
-    faq: faq,
-    feature_sections: featureSections,
-    related_features: opts.related ? related : related.slice(0, 12),
-    related_features_total: related.length,
-    technical: {
-      engine: 'Deep learning (dilatih pada jutaan gambar); memperkirakan & merekonstruksi detail yang hilang, menyesuaikan kontras dan noise.',
-      watermark: 'Gambar hasil ekspor tanpa watermark untuk pengguna gratis (pernyataan FAQ).',
-      upscaling: 'AI UHD memperbesar 2–3× tanpa tepi bergerigi; mendukung gambar hingga 4K.',
-      batch: 'Mendukung unggah batch untuk memproses banyak gambar sekaligus.',
-    },
-    counts: {
-      faq: faq.length,
-      process_steps: processSteps.length,
-      feature_sections: featureSections.length,
-      related_features: related.length,
-      scene_modes: sceneModes.length,
-    },
-  };
-
-  return data;
-}
-
-function buildModeDifferences() {
-  return [
-    {
-      aspect: 'Tingkat restorasi',
-      HD: 'Penajaman & kejernihan standar',
-      'Ultra HD': 'Restorasi + penajaman, rekomendasi umum',
-      'AI UHD': 'Advanced Restoration 3.0 (AI mengisi detail yang hilang)',
-    },
-    {
-      aspect: 'Perbesaran (upscale)',
-      HD: 'Upscale ke HD',
-      'Ultra HD': 'Upscale hingga Ultra HD/4K',
-      'AI UHD': '2–3× dari input',
-    },
-    {
-      aspect: 'Tingkatan biaya',
-      HD: 'Gratis',
-      'Ultra HD': 'Gratis (direkomendasikan)',
-      'AI UHD': 'Premium (di luar kuota cloud gratis)',
-    },
-    {
-      aspect: 'Cocok untuk',
-      HD: 'Gambar buram ringan, butuh ketajaman dasar',
-      'Ultra HD': 'Peningkatan umum foto resolusi rendah',
-      'AI UHD': 'Screenshot/foto resolusi sangat rendah yang perlu detail & perbesaran',
-    },
-  ];
-}
-
-function findStrings(un, keys) {
-  const out = {};
-  for (const k of keys) {
-    const m = un.match(new RegExp('"' + k + '":"((?:[^"\\\\]|\\\\.)*)"'));
-    if (m) { try { out[k] = JSON.parse('"' + m[1] + '"'); } catch (_) { out[k] = m[1]; } }
-  }
-  return out;
-}
-
-function extractPhrase(str, re) {
-  if (!str) return null;
-  const m = String(str).match(re);
-  return m ? m[1] : null;
-}
-
-function deriveFormats(uploadRef) {
-  const text = (uploadRef && (uploadRef.UploadRefImageDesc || uploadRef.RefImageFormatTip)) || '';
-  const set = [];
-  for (const f of ['JPG', 'JPEG', 'PNG', 'WEBP', 'GIF', 'BMP']) {
-    if (new RegExp('\\b' + f + '\\b', 'i').test(text)) set.push(f);
-  }
-  return set.length ? set : null;
-}
-
-// ----------------------------- analisa gambar -----------------------------
+// ===========================================================================
+// ANALISA GAMBAR (dimensi, ukuran, ketajaman) — dipakai mode --test & verifikasi
+// ===========================================================================
 function detectFormat(buf) {
   if (buf.length < 12) return null;
   if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'JPEG';
@@ -543,7 +349,7 @@ function detectFormat(buf) {
 
 function jpegSize(buf) {
   let i = 2;
-  while (i < buf.length) {
+  while (i < buf.length - 8) {
     if (buf[i] !== 0xff) { i++; continue; }
     const marker = buf[i + 1];
     if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
@@ -551,9 +357,10 @@ function jpegSize(buf) {
     }
     if (marker === 0xd8 || marker === 0xd9) { i += 2; continue; }
     const len = buf.readUInt16BE(i + 2);
+    if (len < 2) break;
     i += 2 + len;
   }
-  return null;
+  return { width: null, height: null };
 }
 
 function dimensions(buf, fmt) {
@@ -563,23 +370,15 @@ function dimensions(buf, fmt) {
     if (fmt === 'BMP') return { width: buf.readInt32LE(18), height: Math.abs(buf.readInt32LE(22)) };
     if (fmt === 'JPEG') return jpegSize(buf);
     if (fmt === 'WEBP') {
-      const type = buf.slice(12, 16).toString('ascii');
-      if (type === 'VP8X') {
-        const w = 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16));
-        const h = 1 + (buf[27] | (buf[28] << 8) | (buf[29] << 16));
-        return { width: w, height: h };
-      }
-      if (type === 'VP8 ') return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff };
-      if (type === 'VP8L') {
-        const b = buf.readUInt32LE(21);
-        return { width: (b & 0x3fff) + 1, height: ((b >> 14) & 0x3fff) + 1 };
-      }
+      const t = buf.slice(12, 16).toString('ascii');
+      if (t === 'VP8X') return { width: 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16)), height: 1 + (buf[27] | (buf[28] << 8) | (buf[29] << 16)) };
+      if (t === 'VP8 ') return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff };
+      if (t === 'VP8L') { const b = buf.readUInt32LE(21); return { width: (b & 0x3fff) + 1, height: ((b >> 14) & 0x3fff) + 1 }; }
     }
   } catch (_) {}
   return { width: null, height: null };
 }
 
-// Decoder PNG minimal (8-bit, color type 0/2/4/6) untuk analisa piksel.
 function decodePng(buf) {
   let pos = 8, width, height, bitDepth, colorType;
   const idat = [];
@@ -587,16 +386,13 @@ function decodePng(buf) {
     const len = buf.readUInt32BE(pos);
     const type = buf.toString('ascii', pos + 4, pos + 8);
     const data = buf.slice(pos + 8, pos + 8 + len);
-    if (type === 'IHDR') {
-      width = data.readUInt32BE(0); height = data.readUInt32BE(4);
-      bitDepth = data[8]; colorType = data[9];
-    } else if (type === 'IDAT') idat.push(data);
+    if (type === 'IHDR') { width = data.readUInt32BE(0); height = data.readUInt32BE(4); bitDepth = data[8]; colorType = data[9]; }
+    else if (type === 'IDAT') idat.push(data);
     else if (type === 'IEND') break;
     pos += 12 + len;
   }
-  if (bitDepth !== 8) throw new Error('PNG bit depth ' + bitDepth + ' tidak didukung');
   const channels = colorType === 0 ? 1 : colorType === 2 ? 3 : colorType === 4 ? 2 : colorType === 6 ? 4 : 0;
-  if (!channels) throw new Error('PNG color type ' + colorType + ' tidak didukung');
+  if (bitDepth !== 8 || !channels) throw new Error('PNG tidak didukung (bitDepth=' + bitDepth + ', colorType=' + colorType + ')');
   const raw = zlib.inflateSync(Buffer.concat(idat));
   const stride = width * channels;
   const out = Buffer.alloc(stride * height);
@@ -629,357 +425,716 @@ function grayscale(img) {
   const { width, height, channels, data } = img;
   const g = new Float64Array(width * height);
   for (let i = 0, p = 0; i < g.length; i++, p += channels) {
-    if (channels >= 3) g[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
-    else g[i] = data[p];
+    g[i] = channels >= 3 ? 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2] : data[p];
   }
   return g;
 }
 
-function analyzePixels(img) {
+function laplacianVariance(img) {
   const g = grayscale(img);
   const w = img.width, h = img.height;
-  let sum = 0, sum2 = 0;
-  for (let i = 0; i < g.length; i++) { sum += g[i]; sum2 += g[i] * g[i]; }
-  const mean = sum / g.length;
-  const variance = Math.max(0, sum2 / g.length - mean * mean);
-  // Variansi Laplacian: metrik ketajaman/blur klasik.
-  // Sampling bertahap agar gambar besar (mis. 4K) tetap cepat diproses.
+  if (w < 3 || h < 3) return 0;
   const step = Math.max(1, Math.floor(Math.sqrt((w * h) / 1500000)));
-  let lapSum = 0, lapSum2 = 0, n = 0;
   const k = [-1, -1, -1, -1, 8, -1, -1, -1, -1];
+  let s = 0, s2 = 0, n = 0;
   for (let y = 1; y < h - 1; y += step) {
     for (let x = 1; x < w - 1; x += step) {
       let acc = 0, ki = 0;
-      for (let dy = -1; dy <= 1; dy++)
-        for (let dx = -1; dx <= 1; dx++) acc += g[(y + dy) * w + (x + dx)] * k[ki++];
-      lapSum += acc; lapSum2 += acc * acc; n++;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) acc += g[(y + dy) * w + (x + dx)] * k[ki++];
+      s += acc; s2 += acc * acc; n++;
     }
   }
-  const lapMean = n ? lapSum / n : 0;
-  const lapVar = n ? Math.max(0, lapSum2 / n - lapMean * lapMean) : 0;
-  return {
-    width: w, height: h,
-    brightness_mean: +mean.toFixed(2),
-    contrast_stddev: +Math.sqrt(variance).toFixed(2),
-    sharpness_laplacian_variance: +lapVar.toFixed(2),
-  };
+  const mean = n ? s / n : 0;
+  return n ? Math.max(0, s2 / n - mean * mean) : 0;
 }
 
-function qualityClass(m) {
-  const mp = (m.width * m.height) / 1e6;
-  if (m.sharpness_laplacian_variance >= 200 && mp >= 1) return 'high';
-  if (m.sharpness_laplacian_variance >= 50 || mp >= 0.5) return 'medium';
-  return 'low';
-}
-
-function evaluateMode(modeId, metrics) {
-  const m = normalizeMode(modeId);
-  const reasons = [];
-  const blurry = metrics.sharpness_laplacian_variance < 50;
-  const veryLowRes = metrics.width < 640 || metrics.height < 480;
-  const lowRes = metrics.width < 1280 || metrics.height < 720;
-  const isPortrait = metrics.height / metrics.width > 1.25;
-
-  let recommended;
-  if (veryLowRes || blurry) recommended = 'AI UHD';
-  else if (lowRes) recommended = 'Ultra HD';
-  else recommended = 'HD';
-
-  if (veryLowRes) reasons.push('Resolusi sangat rendah (<640×480) — perlu rekonstruksi detail.');
-  else if (lowRes) reasons.push('Resolusi di bawah HD — cocok dinaikkan ke Ultra HD.');
-  else reasons.push('Resolusi sudah memadai; peningkatan ketajaman sudah cukup.');
-  if (blurry) reasons.push('Metrik ketajaman rendah (Laplacian variance < 50) — gambar cenderung buram.');
-  else reasons.push('Metrik ketajaman memadai.');
-  if (isPortrait) reasons.push('Orientasi portrait terdeteksi.');
-
-  const selected = m || normalizeMode('Ultra HD');
-  return {
-    selected_mode: selected.id,
-    selected_mode_detail: selected,
-    recommended_mode: recommended,
-    recommendation_reasons: reasons,
-    flag_match: m ? (m.id === recommended) : null,
-    expected_effect: {
-      HD: 'Penajaman & kejernihan standar, upscale ke HD.',
-      'Ultra HD': 'Restorasi + penajaman, upscale hingga Ultra HD/4K.',
-      'AI UHD': 'Advanced Restoration 3.0, AI mengisi detail, perbesar 2–3×.',
-    }[recommended],
-    target_output_resolution: {
-      HD: 'HD (kelas 720p–1080p)',
-      'Ultra HD': 'Ultra HD / 4K (kelas 3840×2160)',
-      'AI UHD': '2–3× dari input',
-    }[recommended],
-  };
-}
-
-async function analyzeBuffer(buf, meta) {
+function analyzeImageBuffer(buf, contentType) {
   const fmt = detectFormat(buf);
   const dim = dimensions(buf, fmt);
-  const size = buf.length;
-  const result = {
+  const info = {
     format: fmt,
     width: dim.width,
     height: dim.height,
-    aspect_ratio: dim.width && dim.height ? +(dim.width / dim.height).toFixed(3) : null,
     megapixels: dim.width && dim.height ? +((dim.width * dim.height) / 1e6).toFixed(2) : null,
-    file_size_bytes: size,
-    file_size_human: humanBytes(size),
-    content_type: meta && meta.contentType ? meta.contentType : null,
+    bytes: buf.length,
+    size_human: humanBytes(buf.length),
+    content_type: contentType || null,
+    sharpness_laplacian_variance: null,
+    is_blurry: null,
   };
-
-  let metrics = null;
   try {
     if (fmt === 'JPEG' && jpegJs) {
       const dec = jpegJs.decode(buf, { useTArray: true, maxMemoryUsageInMB: 512 });
-      metrics = analyzePixels({ width: dec.width, height: dec.height, channels: 4, data: dec.data });
+      info.sharpness_laplacian_variance = +laplacianVariance({ width: dec.width, height: dec.height, channels: 4, data: dec.data }).toFixed(2);
     } else if (fmt === 'PNG') {
-      metrics = analyzePixels(decodePng(buf));
+      const dec = decodePng(buf);
+      info.sharpness_laplacian_variance = +laplacianVariance(dec).toFixed(2);
     }
   } catch (e) {
-    result.pixel_analysis_error = e.message;
+    info.pixel_analysis_error = e.message;
+  }
+  if (info.sharpness_laplacian_variance != null) info.is_blurry = info.sharpness_laplacian_variance < 50;
+  return info;
+}
+
+// ===========================================================================
+// MODE 1 — SCRAPE METADATA (PUBLIK, terverifikasi)
+// ===========================================================================
+async function fetchAiTypeConfig(opts) {
+  const url = ENDPOINTS.aiTypeConfig;
+  const res = await req('GET', url, { params: clientParams(), timeout: opts.timeout, retries: opts.retries }, opts);
+  const body = parseJsonMaybe(res.data) || parseJsonMaybe(res.data && res.data.toString());
+  return { status: res.status, body };
+}
+
+function findHowTo(blocks) {
+  const steps = [];
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (node['@type'] === 'HowToStep') steps.push({ step: node.position || steps.length + 1, name: stripHtml(node.name), description: stripHtml(node.text) });
+    if (Array.isArray(node.itemListElement)) node.itemListElement.forEach(walk);
+    if (Array.isArray(node['@graph'])) node['@graph'].forEach(walk);
+  };
+  blocks.forEach(walk);
+  return steps.sort((a, b) => a.step - b.step);
+}
+
+function findFaq(blocks) {
+  const out = [];
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (node['@type'] === 'Question' && node.name) out.push({ question: stripHtml(node.name), answer: node.acceptedAnswer ? stripHtml(node.acceptedAnswer.text || node.acceptedAnswer) : null });
+    const g = node['@graph'] || node.mainEntity;
+    if (Array.isArray(g)) g.forEach(walk);
+  };
+  blocks.forEach(walk);
+  return out;
+}
+
+function findWebsite(blocks) {
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return null;
+    if (n['@type'] === 'WebSite') return n;
+    if (Array.isArray(n['@graph'])) { for (const x of n['@graph']) { const r = walk(x); if (r) return r; } }
+    return null;
+  };
+  for (const b of blocks) { const r = walk(b); if (r) return r; }
+  return null;
+}
+
+function extractFeatureSections($) {
+  const sections = [];
+  $('.pseo__feature-item').each((i, el) => {
+    const title = $(el).find('h2, h3').first().text().replace(/\s+/g, ' ').trim();
+    const desc = $(el).find('p').map((j, p) => stripHtml($(p).text())).get().filter(Boolean).join(' ');
+    if (title) sections.push({ title, description: desc || null });
+  });
+  return sections;
+}
+
+function modeFromConfig(cfg, mode) {
+  // func_id dipakai bersama oleh varian VIDEO (content_type 2) dan IMAGE
+  // (content_type 1); kita ambil varian gambar saja.
+  const list = (cfg && Array.isArray(cfg.data)) ? cfg.data : [];
+  const item =
+    list.find((x) => x.func_id === mode.functionId && x.content_type === 1) ||
+    list.find((x) => x.type === mode.functionType && x.content_type === 1) ||
+    null;
+  if (!item) return null;
+  const f = item.input_limit || {};
+  const o = item.output_format || {};
+  return {
+    id: mode.id,
+    name: mode.name,
+    zh_name: item.name,
+    subscribe_name: item.subscribe_name || null,
+    function_id: mode.functionId,
+    function_type: item.type,
+    material_id: mode.materialId,
+    variant: mode.variant,
+    task_type: item.task_type,
+    content_type: item.content_type,
+    tier: mode.useNeedVip ? 'premium' : 'free',
+    use_need_vip: item.use_need_vip,
+    beans: item.beans,
+    vip_beans: item.vip_beans,
+    ext_value: item.ext_value != null ? item.ext_value : mode.extValue,
+    description: mode.description,
+    resolution: mode.resolution || null,
+    input: {
+      formats: f.formats || null,
+      max_size_bytes: f.max_size_bytes != null ? f.max_size_bytes : null,
+      max_size_human: f.max_size_bytes != null ? humanBytes(f.max_size_bytes) : null,
+      max_long_edge: f.max_long_edge != null ? f.max_long_edge : null,
+      max_short_edge: f.max_short_edge != null ? f.max_short_edge : null,
+      modes: f.modes || null,
+    },
+    output: {
+      formats: o.formats || null,
+      fixed_width: o.width || 0,
+      fixed_height: o.height || 0,
+      long_edge: o.long_edge || 0,
+      short_edge: o.short_edge || 0,
+    },
+    processing: {
+      min_time_s: item.min_time,
+      max_time_s: item.max_time,
+      max_time_normal_s: item.max_time_normal,
+      second_step_s: item.second_step,
+      is_local_process: item.is_local_process,
+    },
+  };
+}
+
+async function scrapeMetadata(opts) {
+  const url = opts.page || DEFAULTS.page;
+  const resHtml = await req('GET', url, { responseType: 'text', timeout: opts.timeout, retries: opts.retries }, opts);
+  const status = resHtml.status;
+  const html = typeof resHtml.data === 'string' ? resHtml.data : String(resHtml.data || '');
+  if (status >= 400) throw new Error('HTTP ' + status + ' saat mengambil ' + url);
+  if (!html || html.length < 500) throw new Error('Konten halaman kosong/terlalu pendek (' + html.length + ' byte)');
+
+  const $ = cheerio.load(html);
+  const blocks = [];
+  $('script[type="application/ld+json"]').each((i, el) => { try { blocks.push(JSON.parse($(el).contents().text())); } catch (_) {} });
+  const faq = findFaq(blocks);
+  const processSteps = findHowTo(blocks);
+  const website = findWebsite(blocks);
+
+  let cfg = { ok: false, status: null, body: null };
+  try { cfg = Object.assign({ ok: true }, await fetchAiTypeConfig(opts)); }
+  catch (e) { cfg.error = e.message; }
+
+  const modes = {};
+  for (const key of Object.keys(MODES)) {
+    const m = MODES[key];
+    modes[key] = modeFromConfig(cfg.body, m) || {
+      id: m.id, name: m.name, function_id: m.functionId, function_type: m.functionType,
+      material_id: m.materialId, variant: m.variant, tier: m.tier, description: m.description,
+      note: 'Detail input/output tidak tersedia dari ai_type_config (fetch gagal?).',
+    };
   }
 
-  result.pixel_metrics = metrics;
-  result.pixel_analysis_available = !!metrics;
-  if (!metrics && fmt === 'JPEG' && !jpegJs) result.pixel_analysis_note = 'Modul jpeg-js tidak tersedia (opsional).';
-  if (!metrics && !['JPEG', 'PNG'].includes(fmt)) result.pixel_analysis_note = 'Analisa piksel ketajaman hanya untuk JPEG/PNG.';
-  result.quality_class = metrics ? qualityClass(metrics) : null;
-  result.is_blurry = metrics ? metrics.sharpness_laplacian_variance < 50 : null;
+  const title = $('title').first().text().trim() || null;
+  const description = $('meta[name="description"]').attr('content') || null;
+  const canonical = $('link[rel="canonical"]').attr('href') || null;
+  const ogTitle = $('meta[property="og:title"]').attr('content') || null;
+  const ogDesc = $('meta[property="og:description"]').attr('content') || null;
+
+  const related = [];
+  $('a').each((i, el) => {
+    const h3 = $(el).find('h3').first();
+    const t = h3.length ? h3.text().replace(/\s+/g, ' ').trim() : '';
+    const href = $(el).attr('href');
+    if (t && href && !/^(#|mailto:|javascript:)/.test(href)) {
+      const u = href.startsWith('http') ? href : BASE + (href.startsWith('/') ? href : '/' + href);
+      if (!related.some((x) => x.url === u)) related.push({ title: t, url: u });
+    }
+  });
+
+  return {
+    ok: true,
+    scraped_at: new Date().toISOString(),
+    source: {
+      site: BASE,
+      feature_page: url,
+      canonical,
+      official_url: BASE + '/image-enhancer',
+      upload_url: DEFAULTS.uploadPage,
+      http_status: status,
+      method: 'axios + cheerio + endpoint publik /api/meitu_ai/ai_type_config.json',
+    },
+    feature: {
+      name: 'Wink AI Image Enhancer',
+      title, og_title: ogTitle,
+      description, og_description: ogDesc,
+      publisher: website && website.name ? website.name : null,
+    },
+    modes,
+    mode_differences: [
+      { aspect: 'Tingkat restorasi', HD: 'Penajaman & kejernihan standar', 'Ultra HD': 'Restorasi + penajaman (rekomendasi umum)', 'AI UHD': 'Advanced Restoration 3.0 (AI mengisi detail)' },
+      { aspect: 'Perbesaran (upscale)', HD: 'Upscale ke HD', 'Ultra HD': 'Upscale hingga Ultra HD/4K', 'AI UHD': '≈2–3× dari input' },
+      { aspect: 'Biaya (beans)', HD: '2', 'Ultra HD': '4', 'AI UHD': '8 (butuh VIP)' },
+      { aspect: 'format_id', HD: '63090', 'Ultra HD': '63091', 'AI UHD': '63093' },
+    ],
+    supported_formats: { formats: ['jpg', 'jpeg', 'jpe', 'png', 'bmp'], output_formats: ['jpg', 'png'] },
+    file_limits: { max_size_bytes: 31457280, max_size_human: '30 MB', max_long_edge: 7999, max_short_edge: 7999, note: 'Nilai dari ai_type_config input_limit (mode HD/Ultra HD/AI UHD).' },
+    process: { steps: processSteps, summary: 'Unggah gambar -> pilih mode (HD / Ultra HD / AI UHD) -> proses -> lihat hasil -> unduh.' },
+    faq,
+    feature_sections: extractFeatureSections($),
+    related_features: opts.related ? related : related.slice(0, 12),
+    endpoints: ENDPOINTS,
+    mode_function_map: { HD: 63090, 'Ultra HD': 63091, 'Portrait Enhance': 63092, 'AI UHD': 63093, Pro: 63100, AIGC: 63101 },
+    counts: { faq: faq.length, process_steps: processSteps.length, related_features: related.length, ai_type_config_items: cfg.body && Array.isArray(cfg.body.data) ? cfg.body.data.length : 0 },
+    ai_type_config_ok: cfg.ok,
+    ai_type_config_error: cfg.error || null,
+  };
+}
+
+// ===========================================================================
+// MODE 2 — TEST KUALITAS (tanpa login)
+// ===========================================================================
+async function loadSource(opts) {
+  if (opts.file) {
+    if (!fs.existsSync(opts.file)) throw new Error('File tidak ditemukan: ' + opts.file);
+    const buf = fs.readFileSync(opts.file);
+    return { buf, name: path.basename(opts.file), source: 'file:' + path.resolve(opts.file), contentType: null };
+  }
+  if (opts.imageUrl) {
+    const res = await req('GET', opts.imageUrl, { responseType: 'arraybuffer', headers: { Accept: 'image/*,*/*' }, timeout: opts.timeout, retries: opts.retries }, opts);
+    if (res.status >= 400) throw new Error('HTTP ' + res.status + ' saat mengunduh gambar: ' + opts.imageUrl);
+    const buf = Buffer.from(res.data);
+    const ct = res.headers['content-type'] || null;
+    let name = 'image';
+    try { name = path.basename(new URL(opts.imageUrl).pathname) || 'image'; } catch (_) {}
+    return { buf, name, source: opts.imageUrl, contentType: ct };
+  }
+  throw new Error('Sumber gambar tidak diberikan (url atau --file).');
+}
+
+async function qualityTest(opts, mode) {
+  const src = await loadSource(opts);
+  const info = analyzeImageBuffer(src.buf, src.contentType);
+  const blurry = info.sharpness_laplacian_variance != null && info.sharpness_laplacian_variance < 50;
+  const lowRes = (info.width || 0) < 1280 || (info.height || 0) < 720;
+  const veryLowRes = (info.width || 0) < 640 || (info.height || 0) < 480;
+  let rec = veryLowRes || blurry ? 'AI UHD' : lowRes ? 'Ultra HD' : 'HD';
+  return {
+    ok: !!info.format,
+    mode: 'quality_test',
+    method: opts.file ? 'LOCAL' : 'GET',
+    request: { source: src.source, selected_mode: mode ? mode.id : null },
+    image: info,
+    recommendation: {
+      recommended_mode: rec,
+      reasons: [
+        veryLowRes ? 'Resolusi sangat rendah (<640×480).' : lowRes ? 'Resolusi di bawah HD.' : 'Resolusi memadai.',
+        blurry ? 'Gambar cenderung buram (Laplacian variance < 50).' : 'Ketajaman memadai.',
+      ],
+      flag_match: mode ? mode.id === rec : null,
+    },
+    note: 'Analisa lokal pada gambar yang diunduh. Tidak memanggil API enhancer privat Wink.',
+  };
+}
+
+// ===========================================================================
+// MODE 3 — ENHANCE (butuh login). Upload -> create task -> polling -> download
+// ===========================================================================
+function pickUrlDeep(obj, depth) {
+  if (depth === undefined) depth = 0;
+  if (obj == null || depth > 6) return null;
+  if (typeof obj === 'string') return /^https?:\/\//.test(obj) ? obj : null;
+  if (Array.isArray(obj)) { for (const x of obj) { const r = pickUrlDeep(x, depth + 1); if (r) return r; } return null; }
+  if (typeof obj === 'object') {
+    const prefer = ['url', 'result_url', 'resultUrl', 'media_url', 'mediaUrl', 'download_url', 'downloadUrl', 'file_url', 'fileUrl', 'src', 'output_url', 'output'];
+    for (const k of prefer) if (obj[k] && typeof obj[k] === 'string' && /^https?:\/\//.test(obj[k])) return obj[k];
+    for (const k of Object.keys(obj)) { const r = pickUrlDeep(obj[k], depth + 1); if (r) return r; }
+  }
+  return null;
+}
+
+function deepFind(obj, keys, depth) {
+  if (depth === undefined) depth = 0;
+  if (obj == null || depth > 8) return undefined;
+  if (typeof obj !== 'object') return undefined;
+  for (const k of keys) if (obj[k] !== undefined) return obj[k];
+  for (const k of Object.keys(obj)) { const r = deepFind(obj[k], keys, depth + 1); if (r !== undefined) return r; }
+  return undefined;
+}
+
+function assertApiOk(body, stage) {
+  if (!body || typeof body !== 'object') throw new Error(stage + ': respons bukan JSON yang bisa dibaca.');
+  if (body.code === undefined && body.errcode === undefined && body.meta === undefined && body.data === undefined) return;
+  const code = body.code !== undefined ? body.code : (body.errcode !== undefined ? body.errcode : (body.meta ? body.meta.code : undefined));
+  const okCodes = [0, 1, 200, 20000];
+  if (code !== undefined && !okCodes.includes(code)) {
+    const msg = body.message || body.msg || (body.meta && body.meta.msg) || JSON.stringify(body).slice(0, 200);
+    const err = new Error(stage + ': server menolak [' + code + '] ' + msg);
+    err.api = { code, message: msg };
+    if (code === 10111 || /登录|login/i.test(String(msg))) {
+      err.hint = 'Endpoint ini butuh LOGIN. Pasok sesi Anda: --cookie="__mt_access_token__=...; __mt_uid__=..." (atau --cookie-file / env WINK_COOKIE / --token).';
+    }
+    throw err;
+  }
+}
+
+async function uploadImage(src, opts) {
+  // /api/v1/upload : multipart, field "media" (file) atau "media_url" (url).
+  const form = new FormData();
+  if (src.buf) {
+    const fmt = detectFormat(src.buf) || 'JPEG';
+    const ext = extForFormat(fmt);
+    const name = /\.(jpe?g|png|webp|gif|bmp)$/i.test(src.name) ? src.name : (src.name || 'image') + ext;
+    form.append('media', new Blob([src.buf]), name);
+  } else {
+    form.append('media_url', src.source);
+  }
+  const res = await req('POST', ENDPOINTS.upload, { data: form, timeout: Math.max(opts.timeout, 60000), retries: opts.retries }, opts);
+  const body = parseJsonMaybe(res.data);
+  if (opts.debug) console.error(dim('[debug] upload response: ' + JSON.stringify(body).slice(0, 800)));
+  assertApiOk(body, 'upload');
+  const url = (body && (pickUrlDeep(body.data) || pickUrlDeep(body))) || null;
+  if (!url) {
+    const e = new Error('upload: berhasil dikirim tetapi URL media tidak ditemukan di respons. Respons: ' + JSON.stringify(body).slice(0, 400));
+    e.debug = body;
+    throw e;
+  }
+  return { url, response: body };
+}
+
+async function createTask(src, uploadedUrl, mode, opts) {
+  // Strategi grup task: /api/meitu_ai_task_group/create_and_delivery.json
+  // skema ditemukan: { taskType, name, clientExtParams, subtaskList:[{...}], withPrepare }
+  const now = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  const stamp = now.getFullYear() + p(now.getMonth() + 1) + p(now.getDate()) + '-' + p(now.getHours()) + p(now.getMinutes()) + p(now.getSeconds());
+
+  const meta = analyzeImageBuffer(src.buf, src.contentType);
+  const subtask = {
+    functionId: mode.functionId,
+    function_id: mode.functionId,
+    type: mode.functionType,
+    taskType: mode.taskType,
+    content_type: 1,
+    extValue: mode.extValue,
+    materialId: mode.materialId,
+    sourceFile: {
+      url: uploadedUrl,
+      width: meta.width || 0,
+      height: meta.height || 0,
+      size: src.buf ? src.buf.length : 0,
+      mediaType: 'image',
+      contentType: 1,
+    },
+    url: uploadedUrl,
+    typeParams: {},
+    extParams: { fromExportpage: 0 },
+  };
+  const payload = {
+    taskType: mode.taskType,
+    name: 'ImageEnhancer-' + mode.id.replace(/\s+/g, '') + '-' + stamp,
+    clientExtParams: {},
+    subtaskList: [subtask],
+    withPrepare: 0,
+  };
+
+  const res = await req('POST', ENDPOINTS.createDeliveryGroup, { data: payload, timeout: opts.timeout, retries: opts.retries, headers: { 'Content-Type': 'application/json' } }, opts);
+  const body = parseJsonMaybe(res.data);
+  if (opts.debug) console.error(dim('[debug] create response: ' + JSON.stringify(body).slice(0, 1200)));
+  assertApiOk(body, 'create');
+
+  const taskId = deepFind(body, ['msgId', 'taskId', 'task_id', 'id', 'msg_id']);
+  const groupId = deepFind(body, ['group_id', 'groupId', 'groupID']) || taskId;
+  return { taskId, groupId, response: body, request: payload };
+}
+
+async function pollTask(ids, opts) {
+  const deadline = Date.now() + (opts.maxWait || DEFAULTS.maxWait);
+  const interval = opts.pollInterval || DEFAULTS.pollInterval;
+  const wantId = ids.taskId;
+  let last = null;
+  while (Date.now() < deadline) {
+    await sleep(interval);
+    let body = null;
+    try {
+      // 1) query task feed by msgIds (paling langsung)
+      if (wantId) {
+        const r = await req('GET', ENDPOINTS.queryBatch, { params: clientParams({ msgIds: String(wantId) }), timeout: opts.timeout, retries: 1 }, opts);
+        body = parseJsonMaybe(r.data);
+      }
+      // 2) fallback: task group list by groupIds
+      if ((!body || !body.data) && ids.groupId) {
+        const r2 = await req('GET', ENDPOINTS.taskGroupList, { params: clientParams({ groupIds: String(ids.groupId) }), timeout: opts.timeout, retries: 1 }, opts);
+        body = parseJsonMaybe(r2.data);
+      }
+    } catch (e) {
+      last = { error: e.message };
+      continue;
+    }
+    last = body;
+    if (opts.debug) console.error(dim('[debug] poll: ' + JSON.stringify(body).slice(0, 500)));
+
+    // cari status & result URL
+    const url = pickUrlDeep(body && body.data);
+    const statusRaw = deepFind(body, ['status', 'taskStatus', 'task_status', 'state', 'processStatus']);
+    const statusNum = typeof statusRaw === 'number' ? statusRaw : undefined;
+    // 0/1 = pending/doing, 2 = done, 3 = error (umum di API Meitu)
+    const done = url || statusNum === 2 || statusNum === 3 || /done|success|finish|complete|error|fail/i.test(String(statusRaw));
+    if (done) {
+      const isError = statusNum === 3 || /error|fail/i.test(String(statusRaw)) || (!url && /error|fail/i.test(JSON.stringify(body).slice(0, 500)));
+      return { finished: true, failed: isError, status: statusRaw, result_url: url, raw: body };
+    }
+  }
+  return { finished: false, failed: false, status: 'timeout', result_url: pickUrlDeep(last && last.data), raw: last };
+}
+
+async function enhance(opts, mode) {
+  const started = Date.now();
+  const accessTokenFromRes = accessTokenFrom(opts);
+  const cookie = cookieHeaderFrom(opts);
+  if (!accessTokenFromRes && !cookie) {
+    const err = new Error(
+      'Mode enhance butuh sesi login Wink yang valid, tetapi tidak ada cookie/token yang diberikan.\n' +
+      '  Endpoint task Wink melindungi semua operasi dengan login (server balas code 10111).\n' +
+      '  Pasokan sesi Anda, misalnya:\n' +
+      '    node scrape-wink.js "' + (opts.imageUrl || opts.file || '<gambar>') + '" --' + (mode ? mode.id : 'UHD') + ' \\\n' +
+      '      --cookie="__mt_access_token__=XXX; __mt_uid__=123; __mt_client_id__=' + CLIENT_ID + '"\n' +
+      '  atau gunakan env WINK_COOKIE / --cookie-file=cookies.txt / --token=<access-token>.'
+    );
+    err.code = 'NO_AUTH';
+    throw err;
+  }
+
+  const result = {
+    ok: false,
+    action: 'enhance',
+    mode: mode.id,
+    function_id: mode.functionId,
+    pipelined: true,
+    stages: {},
+    original: null,
+    result: null,
+    task_id: null,
+    group_id: null,
+    status: null,
+    result_url: null,
+    output_file: null,
+    error: null,
+    elapsed_ms: 0,
+  };
+
+  const src = await loadSource(opts);
+  const orig = analyzeImageBuffer(src.buf, src.contentType);
+  result.original = orig;
+  result.stages.load = { ok: true, source: src.source, width: orig.width, height: orig.height, bytes: orig.bytes, format: orig.format };
+
+  // Tahap 1: upload
+  let up;
+  try {
+    up = await uploadImage(src, opts);
+    result.stages.upload = { ok: true, media_url: up.url };
+  } catch (e) {
+    result.stages.upload = { ok: false, error: e.message, hint: e.hint || null };
+    result.error = 'UPLOAD gagal: ' + e.message;
+    result.elapsed_ms = Date.now() - started;
+    return result;
+  }
+
+  // Tahap 2: create task
+  let task;
+  try {
+    task = await createTask(src, up.url, mode, opts);
+    result.task_id = task.taskId != null ? task.taskId : null;
+    result.group_id = task.groupId != null ? task.groupId : null;
+    result.stages.create = { ok: true, request: task.request, response_summary: JSON.stringify(task.response).slice(0, 800) };
+  } catch (e) {
+    result.stages.create = { ok: false, error: e.message, hint: e.hint || null, api: e.api || null };
+    result.error = 'CREATE TASK gagal: ' + e.message;
+    result.elapsed_ms = Date.now() - started;
+    return result;
+  }
+
+  // Tahap 3: polling
+  let poll;
+  try {
+    poll = await pollTask({ taskId: result.task_id, groupId: result.group_id }, opts);
+    result.status = poll.status;
+    result.result_url = poll.result_url || null;
+    result.stages.poll = { ok: poll.finished && !poll.failed, finished: poll.finished, failed: poll.failed, status: poll.status, result_url: poll.result_url || null };
+  } catch (e) {
+    result.stages.poll = { ok: false, error: e.message };
+    result.error = 'POLLING gagal: ' + e.message;
+    result.elapsed_ms = Date.now() - started;
+    return result;
+  }
+
+  if (!poll.result_url) {
+    result.error = poll.finished
+      ? (poll.failed ? 'Proses di server gagal (status error).' : 'Selesai tetapi URL hasil tidak ditemukan.')
+      : 'Timeout menunggu hasil (max-wait ' + (opts.maxWait) + ' ms).';
+    result.elapsed_ms = Date.now() - started;
+    return result;
+  }
+
+  // Tahap 4: download hasil
+  try {
+    const outDir = opts.outDir || DEFAULTS.outDir;
+    fs.mkdirSync(outDir, { recursive: true });
+    const baseName = (src.name || 'image').replace(/\.[^.]+$/, '') || 'image';
+    const dl = await req('GET', poll.result_url, { responseType: 'arraybuffer', headers: { Accept: 'image/*,*/*' }, timeout: Math.max(opts.timeout, 60000), retries: opts.retries }, opts);
+    if (dl.status >= 400) throw new Error('HTTP ' + dl.status);
+    const outBuf = Buffer.from(dl.data);
+    const fmt = detectFormat(outBuf) || (orig.format === 'PNG' ? 'PNG' : 'JPEG');
+    const outFile = path.join(outDir, baseName + '_' + mode.slug + extForFormat(fmt));
+    fs.writeFileSync(outFile, outBuf);
+    const rMeta = analyzeImageBuffer(outBuf, dl.headers['content-type']);
+    result.result = rMeta;
+    result.output_file = path.resolve(outFile);
+    result.stages.download = { ok: true, output_file: path.resolve(outFile), bytes: outBuf.length };
+    result.ok = true;
+  } catch (e) {
+    result.stages.download = { ok: false, error: e.message };
+    result.error = 'DOWNLOAD gagal: ' + e.message;
+  }
+
+  result.elapsed_ms = Date.now() - started;
   return result;
 }
 
-// ----------------------------- mode uji kualitas -----------------------------
-async function qualityTestGet(imageUrl, modeId, opts) {
-  const res = await httpGet(imageUrl, {
-    responseType: 'arraybuffer',
-    timeout: opts.timeout,
-    retries: opts.retries,
-    headers: { Accept: 'image/*,*/*' },
-  });
-  const buf = Buffer.from(res.data);
-  const info = await analyzeBuffer(buf, { contentType: res.headers['content-type'] });
-  const metrics = info.pixel_metrics || { width: info.width, height: info.height, sharpness_laplacian_variance: null };
-  const evaluation = evaluateMode(modeId, {
-    width: info.width || 0, height: info.height || 0,
-    sharpness_laplacian_variance: metrics.sharpness_laplacian_variance == null ? 100 : metrics.sharpness_laplacian_variance,
-  });
-
-  // Simpan gambar SUMBER yang diunduh ke lokal (bukan hasil enhancer AI).
-  // Aktif bila --save (nama otomatis) atau --save-image[=PATH] diberikan.
-  const wantImage = (opts.save || opts.saveImage) && res.status < 400 && buf.length;
-  if (wantImage) {
-    const target = (opts.saveImage && opts.saveImage !== 'AUTO') ? opts.saveImage : autoImageName(info.format);
-    try {
-      fs.writeFileSync(target, buf);
-      info.saved_to = path.resolve(target);
-      info.saved_bytes = buf.length;
-      console.error(dim('[i] Gambar tersimpan: ' + path.resolve(target)));
-    } catch (e) {
-      info.save_error = e.message;
-    }
-  }
-  // --embed : sisipkan gambar sebagai base64 data-URI ke dalam JSON.
-  if (opts.embed && buf.length) {
-    info.data_uri = 'data:' + (info.content_type || 'application/octet-stream') + ';base64,' + buf.toString('base64');
-  }
-
-  const warnings = [];
-  if (res.status >= 400) warnings.push('HTTP ' + res.status + ' saat mengunduh gambar; data mungkin tidak valid.');
-  if (!info.format) warnings.push('Format gambar tidak dikenali (bukan JPEG/PNG/GIF/WEBP/BMP).');
-  if (info.format && (info.width == null || info.height == null)) warnings.push('Dimensi gambar tidak dapat dibaca.');
-
-  return {
-    mode: 'quality_test',
-    method: 'GET',
-    ok: res.status < 400 && !!info.format,
-    request: { url: imageUrl, http_status: res.status, selected_mode: (normalizeMode(modeId) || {}).id || modeId },
-    warnings: warnings,
-    image: info,
-    mode_evaluation: evaluation,
-    note: 'Analisa dijalankan lokal pada gambar yang diunduh. Scraper tidak memanggil API peningkatan privat Wink (butuh autentikasi).',
-  };
-}
-
-async function qualityTestPost(imageUrl, modeId, opts) {
-  const base = await qualityTestGet(imageUrl, modeId, opts);
-  if (!opts.endpoint) {
-    base.post = {
-      attempted: false,
-      reason: 'Tidak ada --endpoint. POST dilewati; hasil GET di atas tetap valid.',
-    };
-    base.method = 'GET';
-    return base;
-  }
-  const res = await httpGet(imageUrl, { responseType: 'arraybuffer', timeout: opts.timeout, retries: opts.retries, headers: { Accept: 'image/*' } });
-  const buf = Buffer.from(res.data);
-  const contentType = res.headers['content-type'] || 'application/octet-stream';
-  try {
-    const post = await axios.post(opts.endpoint, buf, {
-      timeout: opts.timeout,
-      maxRedirects: DEFAULTS.maxRedirects,
-      validateStatus: () => true,
-      headers: { 'Content-Type': contentType, 'Content-Length': buf.length, 'User-Agent': DEFAULTS.userAgent },
-    });
-    base.method = 'GET+POST';
-    base.post = {
-      attempted: true,
-      endpoint: opts.endpoint,
-      http_status: post.status,
-      response_content_type: post.headers['content-type'] || null,
-      response: typeof post.data === 'string' ? post.data.slice(0, 2000) : post.data,
-    };
-  } catch (e) {
-    base.method = 'GET+POST';
-    base.post = { attempted: true, endpoint: opts.endpoint, error: e.message };
-  }
-  return base;
-}
-
-async function qualityTestFile(file, modeId, opts) {
-  if (!fs.existsSync(file)) throw new Error('File tidak ditemukan: ' + file);
-  const buf = fs.readFileSync(file);
-  const info = await analyzeBuffer(buf, { contentType: null });
-  const metrics = info.pixel_metrics || { sharpness_laplacian_variance: null };
-  const evaluation = evaluateMode(modeId, {
-    width: info.width || 0, height: info.height || 0,
-    sharpness_laplacian_variance: metrics.sharpness_laplacian_variance == null ? 100 : metrics.sharpness_laplacian_variance,
-  });
-  return {
-    mode: 'quality_test',
-    method: 'LOCAL',
-    ok: !!info.format,
-    request: { file: path.resolve(file), selected_mode: (normalizeMode(modeId) || {}).id || modeId },
-    image: info,
-    mode_evaluation: evaluation,
-    note: 'Analisa file lokal (tanpa jaringan).',
-  };
-}
-
-// ----------------------------- CLI -----------------------------
+// ===========================================================================
+// CLI
+// ===========================================================================
 function parseArgs(argv) {
   const opts = {
-    page: null, imageUrl: null, mode: null, post: false, endpoint: null,
-    file: null,     out: DEFAULTS.out, outExplicit: false, retries: DEFAULTS.retries, timeout: DEFAULTS.timeout,
-    related: false, help: false, save: false, saveImage: null, embed: false,
+    page: null, imageUrl: null, file: null, mode: null,
+    action: null, test: false, related: false, json: false, debug: false, help: false,
+    out: DEFAULTS.out, outExplicit: false, outDir: DEFAULTS.outDir,
+    retries: DEFAULTS.retries, timeout: DEFAULTS.timeout,
+    pollInterval: DEFAULTS.pollInterval, maxWait: DEFAULTS.maxWait,
+    cookie: null, cookieFile: null, token: null,
   };
   const words = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') opts.help = true;
-    else if (a === '--post') opts.post = true;
+    else if (a === '--test' || a === '--quality-test') opts.test = true;
+    else if (a === '--enhance') opts.action = 'enhance';
+    else if (a === '--scrape') opts.action = 'scrape';
     else if (a === '--related') opts.related = true;
-    else if (a === '--save') opts.save = true;
-    else if (a === '--embed') opts.embed = true;
-    else if (a === '--save-image') opts.saveImage = 'AUTO';
-    else if (a.startsWith('--save-image=')) opts.saveImage = a.slice(13);
-    else if (a.startsWith('--url=')) opts.page = a.slice(6);
+    else if (a === '--json') opts.json = true;
+    else if (a === '--debug') opts.debug = true;
     else if (a.startsWith('--out=')) { opts.out = a.slice(6); opts.outExplicit = true; }
+    else if (a.startsWith('--out-dir=')) opts.outDir = a.slice(10);
     else if (a.startsWith('--file=')) opts.file = a.slice(7);
+    else if (a.startsWith('--url=')) opts.page = a.slice(6);
     else if (a.startsWith('--retries=')) opts.retries = parseInt(a.slice(10), 10);
     else if (a.startsWith('--timeout=')) opts.timeout = parseInt(a.slice(10), 10);
-    else if (a.startsWith('--endpoint=')) opts.endpoint = a.slice(11);
+    else if (a.startsWith('--poll-interval=')) opts.pollInterval = parseInt(a.slice(16), 10);
+    else if (a.startsWith('--max-wait=')) opts.maxWait = parseInt(a.slice(11), 10);
+    else if (a.startsWith('--cookie=')) opts.cookie = a.slice(9);
+    else if (a.startsWith('--cookie-file=')) opts.cookieFile = a.slice(14);
+    else if (a.startsWith('--token=')) opts.token = a.slice(8);
+    else if (a.startsWith('--endpoint=')) { /* dipertahankan utk kompatibilitas; diabaikan */ }
     else if (a.startsWith('--mode=')) opts.mode = a.slice(7);
-    else if (a === '--mode') { opts.mode = argv[++i]; }
+    else if (a === '--mode') opts.mode = argv[++i];
     else if (a === '--Ultra') { opts.mode = 'Ultra HD'; if (/^HD$/i.test(argv[i + 1] || '')) i++; }
-    else if (/^--(HD|Ultra HD|UHD|uhd|hd|aiuhd|AI UHD|AI-UHD)$/i.test(a)) opts.mode = a.slice(2);
+    else if (a === '--AI') { opts.mode = 'AI UHD'; if (/^UHD$/i.test(argv[i + 1] || '')) i++; }
+    else if (/^--(HD|Ultra[- ]?HD|UHD|AI[- ]?UHD|ultrahd|aiuhd)$/i.test(a)) opts.mode = a.slice(2);
     else if (a.startsWith('--')) continue;
     else words.push(a);
   }
-  if (words[0]) {
+  const urlWord = words.find((w) => /^https?:\/\//i.test(w));
+  if (urlWord) opts.imageUrl = urlWord;
+  else if (words[0] && !opts.file) {
     if (/^https?:\/\//i.test(words[0])) opts.imageUrl = words[0];
-    else if (!opts.file) opts.file = words[0];
+    else opts.file = words[0];
   }
-  if (!opts.mode && words[1]) {
-    // tangani "node scrape-wink.js <url> HD / Ultra HD / UHD" tanpa tanda --
-    const m = normalizeMode(words.slice(1).join(' '));
+  if (!opts.mode) {
+    const rest = words.filter((w) => w !== urlWord).join(' ');
+    const m = normalizeMode(rest) || normalizeMode(words.slice(1).join(' '));
     if (m) opts.mode = m.id;
   }
   return opts;
 }
 
 function usage() {
-  console.log(bold('scrape-wink.js — Scraper Wink AI Image Enhancer + uji kualitas gambar'));
+  console.log(bold('scrape-wink.js — Wink AI Image Enhancer (scrape metadata + enhance/test gambar)'));
   console.log('');
-  console.log(bold('1) Scrape metadata fitur (default):'));
-  console.log('   ' + cyan('node scrape-wink.js') + dim('   # tulis wink-image-enhancer.json + cetak JSON'));
-  console.log('   ' + cyan('node scrape-wink.js --url=https://wink.ai/image-enhancer --related'));
+  console.log(bold('1) Scrape metadata fitur (default, tidak perlu login):'));
+  console.log('   ' + cyan('node scrape-wink.js') + dim('   # -> wink-image-enhancer.json'));
+  console.log('   ' + cyan('node scrape-wink.js --scrape --related'));
   console.log('');
-  console.log(bold('2) Uji kualitas gambar via HTTP GET:'));
+  console.log(bold('2) Enhance gambar (HD / Ultra HD / AI UHD) — BUTUH LOGIN:'));
   console.log('   ' + cyan('node scrape-wink.js "https://image.url.jpg" --HD'));
   console.log('   ' + cyan('node scrape-wink.js "https://image.url.jpg" --Ultra HD'));
   console.log('   ' + cyan('node scrape-wink.js "https://image.url.jpg" --UHD'));
-  console.log('   ' + cyan('node scrape-wink.js "https://image.url.jpg" --mode="Ultra HD"'));
+  console.log('   ' + cyan('node scrape-wink.js --file=foto.jpg --UHD --out-dir=output'));
+  console.log('   ' + dim('   (sertakan --cookie="__mt_access_token__=...; __mt_uid__=..." atau env WINK_COOKIE)'));
   console.log('');
-  console.log(bold('3) Uji via HTTP POST (kirim gambar ke endpoint):'));
-  console.log('   ' + cyan('node scrape-wink.js "https://image.url.jpg" --mode=UHD --post --endpoint=https://host/api'));
+  console.log(bold('3) Uji kualitas gambar saja (tanpa login):'));
+  console.log('   ' + cyan('node scrape-wink.js "https://image.url.jpg" --HD --test'));
+  console.log('   ' + cyan('node scrape-wink.js --file=foto.jpg --UHD --test'));
   console.log('');
-  console.log(bold('4) Uji file lokal:'));
-  console.log('   ' + cyan('node scrape-wink.js --file=foto.png --mode=UHD'));
-  console.log('');
-  console.log(bold('5) Simpan gambar sumber ke lokal / embed base64:'));
-  console.log('   ' + cyan('node scrape-wink.js "https://image.url.jpg" --HD --save') + dim('            # nama otomatis wink-<tanggal>.jpg'));
-  console.log('   ' + cyan('node scrape-wink.js "https://image.url.jpg" --HD --save-image=hasil.jpg'));
-  console.log('   ' + cyan('node scrape-wink.js "https://image.url.jpg" --HD --save --embed') + dim('    # + base64 di JSON'));
-  console.log('');
-  console.log('Opsi: ' + dim('--out=file.json  --save  --save-image=out.jpg  --embed  --retries=3  --timeout=30000  --related'));
+  console.log('Opsi: ' + dim('--out=file.json  --out-dir=./output  --timeout=30000  --retries=3'));
+  console.log('      ' + dim('--poll-interval=3000  --max-wait=300000  --cookie=..  --cookie-file=..  --token=..'));
+  console.log('      ' + dim('--related  --json  --debug'));
 }
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-
   if (opts.help) { usage(); return; }
 
-  // Mode uji kualitas gambar
-  if (opts.file || opts.imageUrl) {
-    let result;
-    if (opts.file) {
-      result = await qualityTestFile(opts.file, opts.mode, opts);
-    } else if (opts.post) {
-      result = await qualityTestPost(opts.imageUrl, opts.mode, opts);
-    } else {
-      result = await qualityTestGet(opts.imageUrl, opts.mode, opts);
-    }
-    const json = JSON.stringify(result, null, 2);
+  const isImageAction = !!(opts.file || opts.imageUrl);
+  const action = opts.action || (isImageAction ? (opts.test ? 'test' : 'enhance') : 'scrape');
+
+  if (action === 'scrape') {
+    console.error(dim('[i] Scraping metadata: ' + (opts.page || DEFAULTS.page)));
+    const data = await scrapeMetadata(opts);
+    const json = JSON.stringify(data, null, 2);
     console.log(json);
-    if (opts.save || opts.outExplicit) {
-      const f = opts.outExplicit
-        ? opts.out
-        : (opts.file ? 'wink-quality-' + path.basename(opts.file) + '.json' : 'wink-quality.json');
-      try { fs.writeFileSync(f, json); console.error(dim('[i] Hasil disimpan: ' + path.resolve(f))); } catch (_) {}
-    }
+    try { fs.writeFileSync(opts.out, json); console.error(dim('[i] Disimpan ke: ' + path.resolve(opts.out))); }
+    catch (e) { console.error(yellow('[!] Gagal menulis file: ' + e.message)); }
     return;
   }
 
-  // Mode scrape metadata (default)
-  console.error(dim('[i] Scraping metadata: ' + (opts.page || DEFAULTS.page)));
-  const data = await scrapeMetadata(opts.page, opts);
-  const json = JSON.stringify(data, null, 2);
-  console.log(json);
-  try {
-    fs.writeFileSync(opts.out, json);
-    console.error(dim('[i] Disimpan ke: ' + path.resolve(opts.out)));
-  } catch (e) {
-    console.error(yellow('[!] Gagal menulis file: ' + e.message));
+  const mode = normalizeMode(opts.mode) || (opts.mode ? null : normalizeMode('Ultra HD'));
+  if (opts.mode && !mode) {
+    const err = new Error('Mode tidak dikenal: "' + opts.mode + '". Gunakan: HD | Ultra HD | UHD (AI UHD).');
+    console.error(red('[FATAL] ' + err.message));
+    if (opts.json) console.log(JSON.stringify({ ok: false, error: err.message }, null, 2));
+    process.exitCode = 2;
+    return;
   }
-  console.error(
-    green('[✓] Selesai') + dim(
-      '  modes: ' + data.modes.primary.length + ' primer / ' + data.modes.scene_based.length + ' skenario' +
-      '  faq: ' + data.counts.faq + '  langkah: ' + data.counts.process_steps +
-      '  fitur terkait: ' + data.counts.related_features
-    )
-  );
+
+  if (action === 'test') {
+    const data = await qualityTest(opts, mode);
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+
+  // action === 'enhance'
+  console.error(dim('[i] Mode enhance: ' + (mode ? mode.id : 'Ultra HD') + ' (functionId ' + (mode || MODES['Ultra HD']).functionId + ')'));
+  const data = await enhance(opts, mode || MODES['Ultra HD']);
+  console.log(JSON.stringify(data, null, 2));
+
+  // JSON ringkas (field yang diminta) ke file default di outDir
+  try {
+    const summary = {
+      ok: data.ok,
+      mode: data.mode,
+      function_id: data.function_id,
+      task_id: data.task_id,
+      status: data.status,
+      result_url: data.result_url,
+      output_file: data.output_file,
+      original: data.original ? { width: data.original.width, height: data.original.height, bytes: data.original.bytes, format: data.original.format } : null,
+      result: data.result ? { width: data.result.width, height: data.result.height, bytes: data.result.bytes, format: data.result.format } : null,
+      error: data.error,
+      elapsed_ms: data.elapsed_ms,
+    };
+    if (opts.outExplicit) fs.writeFileSync(opts.out, JSON.stringify(summary, null, 2));
+  } catch (_) {}
+
+  if (!data.ok) {
+    console.error(red('[✗] Enhance gagal: ' + (data.error || 'unknown')));
+    if (data.stages && data.stages.upload && data.stages.upload.hint) console.error(yellow('[!] ' + data.stages.upload.hint));
+    process.exitCode = 1;
+  } else {
+    console.error(green('[✓] Selesai') + dim('  hasil: ' + data.output_file));
+  }
 }
 
 if (require.main === module) {
   main().catch((e) => {
-    const msg = (e && (e.stack || e.message)) || String(e);
-    console.error(red('FATAL: ' + msg));
-    // Tetap keluarkan JSON error agar downstream tidak menerima output kosong.
-    if (process.argv.slice(2).some((a) => a.startsWith('--json'))) {
-      console.log(JSON.stringify({ ok: false, error: e.message }, null, 2));
+    console.error(red('FATAL: ' + ((e && (e.stack || e.message)) || String(e))));
+    if (process.argv.slice(2).some((a) => a === '--json')) {
+      console.log(JSON.stringify({ ok: false, error: e.message, code: e.code || null }, null, 2));
     }
     process.exit(1);
   });
 }
 
-module.exports = { scrapeMetadata, normalizeMode, PRIMARY_MODES, parseArgs, detectFormat, dimensions, analyzeBuffer, evaluateMode };
+module.exports = {
+  scrapeMetadata, qualityTest, enhance, normalizeMode, MODES, ENDPOINTS,
+  detectFormat, dimensions, analyzeImageBuffer, parseArgs, clientParams,
+};
