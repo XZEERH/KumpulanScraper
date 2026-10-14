@@ -8,8 +8,7 @@
  * Base web : https(.)copywebsitetarget(.)netlify(.)app
  * Type : Scraper
  * Description : Mengambil "source code" sebuah website selengkap mungkin lalu mengemasnya menjadi struktur folder + file ZIP, dan menulis manifest JSON.
- * Note : Yang diambil:
-HTML (halaman root + halaman same-origin yang ditautkan), CSS (termasuk @import dan url() bersarang), JavaScript (termasuk dynamic import / chunk Vite), Source Maps (*.map) -> memulihkan file asli (TS/TSX/JSX/Vue/JS/CSS) dari field "sourcesContent" persis seperti saat develop, Gambar (png/jpg/jpeg/webp/gif/svg/ico/avif/bmp), Font web (woff/woff2/ttf/otf/eot), Data JSON / webmanifest (+ ikon & shortcut di dalamnya), Inline <style> / style="" / inline <script>
+ * Note : Yang diambil adalah berupa HTML (halaman root + halaman same-origin yang ditautkan), CSS (termasuk @import dan url() bersarang), JavaScript (termasuk dynamic import / chunk Vite), Source Maps (*.map) -> memulihkan file asli (TS/TSX/JSX/Vue/JS/CSS) dari field "sourcesContent" persis seperti saat develop, Gambar (png/jpg/jpeg/webp/gif/svg/ico/avif/bmp), Font web (woff/woff2/ttf/otf/eot), Data JSON / webmanifest (+ ikon & shortcut di dalamnya), Inline <style> / style="" / inline <script>
 Dependensi : axios + cheerio. Scrape ini kompatibel pada Node.js >= 18 (keatas). Btw error fix sendiri
  */
 
