@@ -12,26 +12,11 @@
 
  * Dua kemampuan utama:
  *
- *  1. SCRAPE metadata fitur Image Enhancer (mode HD / Ultra HD / AI UHD),
- *     parameter, format, batas ukuran, proses, dll.  -> JSON
- *     Sumber data:
- *       - Endpoint PUBLIK  GET /api/meitu_ai/ai_type_config.json
- *         (config algoritma asli + input_limit: format, max_size, max_edge)
- *       - HTML SSR /image-enhancer  (JSON-LD HowTo + FAQ, heading, paragraf)
- *       - Payload i18n Next.js (self.__next_f) dari halaman upload
- *     Metode: Axios + Cheerio (tanpa headless browser).  TERVERIFIKASI jalan.
+ * 1.SCRAPE metadata fitur Image Enhancer (mode HD / Ultra HD / AI UHD),parameter, format, batas ukuran, proses, dll. -> JSON Sumber data dari Endpoint PUBLIK  GET /api/meitu_ai/ai_type_config.json (config algoritma asli + input_limit: format, max_size, max_edge) HTML SSR /image-enhancer (JSON-LD HowTo + FAQ, heading, paragraf). Payload i18n Next.js (self.__next_f) dari halaman upload Metode eksekusi menggunakan Axios + Cheerio (tanpa headless browser).  TERVERIFIKASI jalan.
  *
- *  2. ENHANCE gambar nyata (unggah -> buat task -> polling -> unduh hasil)
- *     memakai endpoint privat Wink.  Endpoint, method, header & payload asli
- *     ditemukan dari reverse-engineering bundle JS klien (lihat ENDPOINTS).
+ * 2.ENHANCE gambar nyata (unggah -> buat task -> polling -> unduh hasil), memakai endpoint privat Wink.  Endpoint, method, header & payload asli ditemukan dari reverse-engineering bundle JS klien (lihat ENDPOINTS).
  *
- * Note : seluruh endpoint task/enhance milik Wink WAJIB LOGIN
- *     (cookie `__mt_access_token__` / header `Access-Token`). Tanpa sesi login
- *     yang valid server membalas: {"code":10111,"message":"登录验证失败，请先登录"}
- *     ("verifikasi login gagal, silakan login dulu"). Script TIDAK bisa membuat
- *     akun sendiri, jadi mode enhance hanya berjalan bila kamu memasok sesi
- *     login Anda (--cookie / --cookie-file / env WINK_COOKIE). Bila tidak ada,
- *     script berhenti dengan pesan error yang jelas. Btw error fix sendiri
+ * Note : seluruh endpoint task/enhance milik Wink WAJIB LOGIN (cookie `__mt_access_token__` / header `Access-Token`). Tanpa sesi login yang valid server membalas: {"code":10111,"message":"登录验证失败，请先登录"}, ("verifikasi login gagal, silakan login dulu"). Script TIDAK bisa membuat akun sendiri, jadi mode enhance hanya berjalan bila kamu memasok sesi login Anda (--cookie / --cookie-file / env WINK_COOKIE). Bila tidak ada,script berhenti dengan pesan error yang jelas. Btw error fix sendiri
  */
 
 const axios = require('axios');
