@@ -7,7 +7,7 @@
  * Base Web : https://www.snapyt.app/id/
  * Type : Scraper
  * Description : Download video YouTube dan YouTube Shorts melalui eksekusi url. Pengguna dapat memasukkan URL video atau mencari berdasarkan kata kunci, username channel, dan hashtag. Website ini menyediakan pilihan format video MP4/WEBM serta audio MP3/M4A dengan kualitas yang bergantung pada ketersediaan sumber.
- * Note : Pilihan format dan kualitas nya lengkap banget, dari MP4 = Kualitas didapat 114p, 240p, 360p, 480p, 720p, 720p60, 1080p60. Untuk WEBM = 240p, 360p, 480p, 720p, 720p60, 1080p60. Lanjut format audio/MP3 = 128 kbps, 192 kbps, 320 kbps. Sama ada pilihan Audio (M4A) • Indonesian = Opus Audio 56 kbps, 83 kbps, 152 kbps, ada lagi pilihan Audio • English = Opus audio 51 kbps, 82 kbps, 130 kbps, 144 kbps. Scrape ini menggunakan dependensi: axios, cheerio dan hanya kompatibel di Node.js >= 16 (keatas). Btw Link download/stream bersifat sementara jadi token preview kedaluwarsa beberapa jam. Error fix sendiri
+ * Note : Pilihan format dan kualitas nya lengkap banget, dari MP4 = Kualitas didapat/bisa dipilih 114p, 240p, 360p, 480p, 720p, 720p60, 1080p60. Untuk WEBM = 240p, 360p, 480p, 720p, 720p60, 1080p60. Lanjut format audio/MP3 = 128 kbps, 192 kbps, 320 kbps. Sama ada pilihan Audio Track (M4A) • Indonesian = Opus Audio 56 kbps, 83 kbps, 152 kbps, ada lagi pilihan Audio • English = Opus audio 51 kbps, 82 kbps, 130 kbps, 144 kbps. Scrape ini menggunakan dependensi: axios, cheerio dan hanya kompatibel di Node.js >= 16 (keatas). Btw Link download/stream bersifat sementara jadi token preview kedaluwarsa beberapa jam. Error fix sendiri
  */
 
 const axios = require("axios");
