@@ -6,8 +6,8 @@
  * Source : https://whatsapp.com/channel/0029VbCN4sQLo4hhDCkOHX1m
  * Base Web : https://perchance.org/ai-text-to-image-generator
  * Type : Scraper
- * Description : Perchance AI Text-to-Image Generatormenghasilkan gambar menggunakan AI berdasarkan prompt teks. Lu pada cukup memasukkan deskripsi gambar, memilih gaya visual, menentukan rasio gambar, mengatur jumlah hasil, lalu menghasilkan gambar secara otomatis.
- * Note : Sempat gagal 6x gegara cf turnstile nolak IP/Datacenter trus serta chromium di kill + UserKey expired, gw coba bypass pakai CaptchaX punya omnify sambil dibantu AI hasilnya tembus, serta 
+ * Description : Perchance AI Text-to-Image Generator menghasilkan gambar menggunakan AI berdasarkan prompt teks. Lu pada cukup memasukkan deskripsi gambar, memilih gaya visual, menentukan rasio gambar, mengatur jumlah hasil, lalu menghasilkan gambar secara otomatis.
+ * Note : Pengujian scrape Text-to-Image (Txt2img) pas Chromium 136 sempet mengalami crash dan di kill oleh cf turnstile selama 6x,Untuk atasin itu gw sempet dibantu ama AI dan ngebypass engine yg dibutuhkan. Hasil laporan AI, katany Chromium 155 berjalan stabil Setelah penyesuaian lingkungan browser dan alur verifikasi. Untuk saat ini gk ada error lagi, tapi klo semisal di lu pada malah error, fix sendiri aja ya.
  */
 
 const fs = require('fs');
