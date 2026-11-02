@@ -10,8 +10,6 @@
 Note : Error fix sendiri
  */
 
-code : https://github.com/XZEERH/KumpulanScraper/blob/main/scrape-ytmusik.js
-
 process.title = 'tiktok-stiker';
 
 const fs = require('fs');
