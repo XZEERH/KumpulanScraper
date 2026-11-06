@@ -1,16 +1,16 @@
 #!/usr/bin/env node
+
 /**
- * scrape-remini.js
- * Remini (Google Play) scraper + AI Photo Enhancer pipeline.
- *
- * Target : https://play.google.com/store/apps/details?id=com.bigwinepot.nwdn.international
- * Output : result.json (root project) + output/<name>_hd.jpg
- *
- * CLI   : node scrape-remini.js [image.png|image_url]
- * Module: const remini = require('./scrape-remini.js');
- *         await remini.scapeNo().catch(e => console.log(e));            // scrape app info
- *         await remini.enhance('tes.png');                              // full pipeline
+ * Name : Remini
+ * Creator : Razeerh
+ * Source : https://whatsapp.com/channel/0029VbCN4sQLo4hhDCkOHX1m
+ * Base Web/apps : https://play.google.com/store/apps/details?id=com.bigwinepot.nwdn.international
+ * Type : Scraper
+ * Method : GET/POST
+ * Description : meningkatkan/memperbaiki kualitas foto menggunakan berbasis AI
+Note : Error fix sendiri
  */
+
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
