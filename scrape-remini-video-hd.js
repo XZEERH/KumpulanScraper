@@ -1,21 +1,17 @@
 #!/usr/bin/env node
+
 /**
- * scrape-reminiv2.js
- * Remini (Google Play) scraper + AI Video Enhancer pipeline.  v2
- *
- * Target : https://play.google.com/store/apps/details?id=com.bigwinepot.nwdn.international
- * Output : result.json (root project) + output/<name>_hd.mp4
- *
- * Scraper engine : Axios (static HTML) + Cheerio parsing  -> ld+json, itemprops,
- *                  og:meta, play-lh regex fallback.      -> no browser needed
- * Video engine   : native ffmpeg/ffprobe (spawn) -> 2x lanczos upscale + denoise
- *                  + sharpen + color, H.264 MP4 output.  -> no heavy engine
- *
- * CLI   : node scrape-reminiv2.js ["tes.mp4" | video_url]
- * Module: const remini = require('./scrape-reminiv2.js');
- *         await remini.scrapeReminiApp();      // info app from Play Store
- *         await remini.enhance('tes.mp4');     // full pipeline
+ * Name : Remini Video HD
+ * Creator : Razeerh
+ * Source : https://whatsapp.com/channel/0029VbCN4sQLo4hhDCkOHX1m
+ * Base Web/apps : https://play.google.com/store/apps/details?id=com.bigwinepot.nwdn.international
+ * Type : Scraper
+ * Method : GET
+ * Description : versi meningkatkan/memperbaiki kualitas video
+Note : Native yang digunakan ffmpeg/ffprobe, btw Error fix sendiri
  */
+
+
 'use strict';
 
 const fs = require('fs');
