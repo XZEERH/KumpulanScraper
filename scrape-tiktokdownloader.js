@@ -5,8 +5,8 @@
  * Base Web/apps : https://tikdown(.)com
  * Type : Scraper/JSON
  * Method : GET
- * Description : 
-Note : 
+ * Description : Downloader tiktok
+Note : Downloadernya udah mendukung 3 type, yaitu Video tiktok, Photo Slide, dan Story, Btw error fix sendiri.
  */
 
 #!/usr/bin/env node
