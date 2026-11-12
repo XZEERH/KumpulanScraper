@@ -2,21 +2,13 @@
 'use strict';
 
 /**
- * scrape-ffstalk.js
- *
- * Free Fire player scraper using Garena's official game API.
- * No browser automation, no user cookies/tokens required.
- * Self-contained: protobuf schemas, login template, and item names are embedded.
- * Copying this single file into another Node.js project is enough.
- *
- * CLI:
- *   node scrape-ffstalk.js 87980657
- *   node scrape-ffstalk.js "MP INCE"
- *   node scrape-ffstalk.js "MP INCE" --no-write
- *
- * Module:
- *   const { scrapeFFStalk } = require('./scrape-ffstalk');
- *   const result = await scrapeFFStalk('MP INCE', { writeFile: true });
+ * Name : Free Fire Stalk
+ * Creator : Razeerh
+ * Source : https://whatsapp.com/channel/0029VbCN4sQLo4hhDCkOHX1m
+ * Base Web/apps : -
+ * Type : Scraper
+ * Description : Stalk akun ff
+Note : Udah lengkap banget. Btw jgn lupa install "npm install protobufjs" 
  */
 
 const fs = require('fs');
@@ -25,20 +17,6 @@ const path = require('path');
 const crypto = require('crypto');
 const axios = require('axios');
 const protobuf = require('protobufjs');
-
-/* -------------------------------------------------------------------------- */
-/* Embedded assets                                                            */
-/* -------------------------------------------------------------------------- */
-/*
- * scrape-ffstalk.js is self-contained: protobuf schemas, the MajorLogin
- * template, and the item-name map are embedded below. Copying this single
- * file is enough; no proto/ or data/ directory is required.
- *
- * Optional external overrides:
- *   FFSTALK_PROTO_DIR       directory containing the three .proto files
- *   FFSTALK_TEMPLATE_FILE   path to gamedata-template.bin
- *   FFSTALK_ITEMS_FILE      path to an items.json name map
- */
 
 const EMBEDDED_PROTO_SOURCES = {
   "MajorLogin.proto": `syntax = "proto3";
@@ -3013,10 +2991,10 @@ function printHelp(stream = process.stdout) {
       '  node scrape-ffstalk.js <uid|nickname> [options]',
       '',
       'Examples:',
-      '  node scrape-ffstalk.js 87980657',
-      '  node scrape-ffstalk.js "MP INCE"',
-      '  node scrape-ffstalk.js "MP INCE" --no-write',
-      '  node scrape-ffstalk.js 87980657 --out ./data/player.json',
+      '  node scrape-ffstalk.js 123456789',
+      '  node scrape-ffstalk.js "PlayerName"',
+      '  node scrape-ffstalk.js "PlayerName" --no-write',
+      '  node scrape-ffstalk.js 123456789 --out ./output/player.json',
       '',
       'Options:',
       '  --no-write       Do not write result.json',
