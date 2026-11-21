@@ -1,9 +1,17 @@
+/**
+ * Name : Free Upscaler Video/image
+ * Creator : Razeerh
+ * Source : https://whatsapp.com/channel/0029VbCN4sQLo4hhDCkOHX1m
+ * Base Web/Apps : https://free(.)upscaler(.)video/id
+ * Type : Scraper/JSON
+ * method : GET/POST
+ * Description : Meningkatkan resolusi  dan kualitas video maupun gambar menggunakan teknologi AI. 
+ * Note : Error fix sendiri
+ **/
+
+
 #!/usr/bin/env node
-/*
- * scrape-freeupscaler | Creator: Razeerh | 21-11-2026
- * Target: https://free.upscaler.video (WebSR, 100% client-side)
- * Scrape engine config + media metadata into a prepared upscale report.
- */
+
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { createHash, randomUUID } from 'node:crypto';
