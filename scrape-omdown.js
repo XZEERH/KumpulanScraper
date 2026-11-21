@@ -2,14 +2,14 @@
 "use strict";
 
 /**
- * Name: Omdown (fixed)
+ * Name: Omdown All In One Downloader (Fixed)
  * Creator: Razeerh
  * Source: https://whatsapp.com/channel/0029VbCN4sQLo4hhDCkOHX1m
  * Base Web/Apps: https://www(.)omdown(.)site
- * Ty otomatis. Btw udah dilakukan pengujian dengan link yang tersedia. Harusnya work lah ya, btw error fix sendiri.
+ * Type: Scraper/JSON
+ * Description: All In One Downloader.
+ * Note: Scrape omdown diperbaiki, jadi harusnya udah bisa dipakai.
  **/
-
-Code : https://github.com/XZEERH/KumpulanScraper/blob/main/scrape-bypass.js
 
 const fs = require("fs");
 const path = require("path");
