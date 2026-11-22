@@ -1,12 +1,11 @@
 /**
- * Name: melolo-scraper
- * Creator: Razeerh
- * Source: https://whatsapp.com/channel/0029VbCN4sQLo4hhDCkOHX1m
- * Base Web/Apps: https://melolo.com (Melolo - com.worldance.drama)
- * Type: Scraper/JSON
- * Description: Melolo short-drama scraper for homepage, genres, search, detail, episodes, signed streams, download info, dubbing languages and recommendations.
- * Date: 22-11-2026
- * Note: Uses the official Melolo web API and server-rendered pages. No Chromium, no raw video scraping, no third-party API.
+ * Name : melolo-scraper
+ * Creator : Razeerh
+ * Source : https://whatsapp.com/channel/0029VbCN4sQLo4hhDCkOHX1m
+ * Base Web/Apps : https://melolo.com (Melolo - com.worldance.drama)
+ * Type : Scraper/JSON
+ * Description : Melolo short-drama scraper for homepage, genres, search, detail, episodes, signed streams, download info, dubbing languages and recommendations.
+ * Note : Lengkap ygy. Btw Error fix sendiri
  **/
 
 import * as cheerio from 'cheerio';
