@@ -9,15 +9,24 @@
  * Note : Ya gitulah intinya, bagi yang mau aja, btw Error fix sendiri.
  **/
 
+import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { createRequire } from 'node:module';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import decodeWebp, { init as initWebpDecode } from '@jsquash/webp/decode.js';
+import encodeWebp, { init as initWebpEncode } from '@jsquash/webp/encode.js';
 
 const BASE_URL = 'https://nasanamegenerator.com';
 const HOME_URL = `${BASE_URL}/`;
 const MAX_NAME_LENGTH = 18;
 const REQUEST_TIMEOUT = 20000;
 const ENGINE_TTL = 60 * 60 * 1000;
+const FRAME_GAP = 25;
+const FRAME_SPACE = 60;
+const FRAME_QUALITY = 90;
+const MAX_PREVIEW_COLUMNS = 120;
+const MAX_PREVIEW_ROWS = 36;
 
 const HTTP_STATUS = {
   200: 'OK',
@@ -158,11 +167,165 @@ function buildMapsUrl(entry) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entry.coordinates)}`;
 }
 
+const require = createRequire(import.meta.url);
+let webpReady = null;
+
+function initWebp() {
+  if (!webpReady) {
+    webpReady = (async () => {
+      const root = dirname(require.resolve('@jsquash/webp/package.json'));
+      await initWebpDecode(
+        new WebAssembly.Module(readFileSync(join(root, 'codec/dec/webp_dec.wasm'))),
+      );
+      await initWebpEncode(
+        new WebAssembly.Module(readFileSync(join(root, 'codec/enc/webp_enc_simd.wasm'))),
+      );
+    })();
+  }
+
+  return webpReady;
+}
+
+async function buildFrame(tiles, buffers) {
+  await initWebp();
+
+  const images = [];
+  for (const tile of tiles) {
+    const buffer = buffers.get(tile.tile);
+    if (!buffer) throw new Error(`Missing image for ${tile.tile}`);
+
+    images.push(
+      await decodeWebp(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)),
+    );
+  }
+
+  const spaces = [];
+  let previousPosition = 0;
+
+  for (const tile of tiles) {
+    spaces.push(Math.max(0, tile.position - previousPosition - 1));
+    previousPosition = tile.position;
+  }
+
+  const width =
+    images.reduce((sum, image) => sum + image.width, 0) +
+    FRAME_GAP * (images.length - 1) +
+    spaces.reduce((sum, count) => sum + count * FRAME_SPACE, 0);
+  const height = Math.max(...images.map((image) => image.height));
+  const data = new Uint8Array(width * height * 4).fill(255);
+  let offsetX = 0;
+
+  for (let index = 0; index < images.length; index += 1) {
+    if (index > 0) offsetX += FRAME_GAP + spaces[index] * FRAME_SPACE;
+
+    const image = images[index];
+    for (let y = 0; y < image.height; y += 1) {
+      data.set(
+        image.data.subarray(y * image.width * 4, (y + 1) * image.width * 4),
+        (y * width + offsetX) * 4,
+      );
+    }
+    offsetX += image.width;
+  }
+
+  const webp = await encodeWebp(
+    { width, height, data },
+    { quality: FRAME_QUALITY, method: 4 },
+  );
+
+  return {
+    mime: 'image/webp',
+    width,
+    height,
+    image: `data:image/webp;base64,${Buffer.from(webp).toString('base64')}`,
+  };
+}
+
+function resizeArea(image, width, height) {
+  const out = new Uint8ClampedArray(width * height * 4);
+  const { data, width: sourceWidth, height: sourceHeight } = image;
+
+  for (let y = 0; y < height; y += 1) {
+    const y0 = Math.floor((y * sourceHeight) / height);
+    const y1 = Math.min(sourceHeight, Math.max(y0 + 1, Math.floor(((y + 1) * sourceHeight) / height)));
+
+    for (let x = 0; x < width; x += 1) {
+      const x0 = Math.floor((x * sourceWidth) / width);
+      const x1 = Math.min(
+        sourceWidth,
+        Math.max(x0 + 1, Math.floor(((x + 1) * sourceWidth) / width)),
+      );
+
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      let count = 0;
+
+      for (let sy = y0; sy < y1; sy += 1) {
+        let index = (sy * sourceWidth + x0) * 4;
+        for (let sx = x0; sx < x1; sx += 1, index += 4) {
+          red += data[index];
+          green += data[index + 1];
+          blue += data[index + 2];
+          count += 1;
+        }
+      }
+
+      const target = (y * width + x) * 4;
+      out[target] = red / count;
+      out[target + 1] = green / count;
+      out[target + 2] = blue / count;
+      out[target + 3] = 255;
+    }
+  }
+
+  return { data: out, width, height };
+}
+
+function renderAnsi(image) {
+  const rows = [];
+  const { data, width, height } = image;
+
+  for (let y = 0; y < height; y += 2) {
+    let line = '';
+    for (let x = 0; x < width; x += 1) {
+      const top = (y * width + x) * 4;
+      const bottom = (Math.min(y + 1, height - 1) * width + x) * 4;
+
+      line += `\x1b[38;2;${data[top]};${data[top + 1]};${data[top + 2]}m`;
+      line += `\x1b[48;2;${data[bottom]};${data[bottom + 1]};${data[bottom + 2]}m\u2580`;
+    }
+    rows.push(`${line}\x1b[0m`);
+  }
+
+  return `${rows.join('\n')}\n`;
+}
+
+async function previewFrame(frame, maxColumns) {
+  await initWebp();
+
+  const buffer = Buffer.from(frame.image.split(',')[1], 'base64');
+  const image = await decodeWebp(
+    buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+  );
+
+  let width = Math.max(8, Math.min(maxColumns, image.width));
+  let height = Math.max(2, Math.round((image.height / image.width) * width));
+
+  if (height > MAX_PREVIEW_ROWS * 2) {
+    height = MAX_PREVIEW_ROWS * 2;
+    width = Math.max(8, Math.round((image.width / image.height) * height));
+  }
+  if (height % 2) height += 1;
+
+  return renderAnsi(resizeArea(image, width, height));
+}
+
 /**
  * Build Landsat tiles for a name.
  * @param {string} rawName Letters A-Z and spaces, max 18 characters.
- * @param {{mode?: 'url' | 'base64'}} [options] 'url' for GET-style links, 'base64' for inline data URIs.
- * @returns {Promise<[object, {data: object[]}]>} Standard two-object scraper response.
+ * @param {{mode?: 'url' | 'base64', frame?: boolean}} [options] 'url' for GET-style links, 'base64' for inline data URIs, frame false to skip the combined image.
+ * @returns {Promise<[object, {data: object[], frame?: object}]>} Standard two-object scraper response.
  */
 export async function nasaNameGenerator(rawName, options = {}) {
   const mode = options.mode === 'url' ? 'url' : 'base64';
@@ -211,9 +374,12 @@ export async function nasaNameGenerator(rawName, options = {}) {
 
     if (!tiles.length) throw httpError(404, 'No Landsat tile available for this name');
 
+    const wantFrame = options.frame !== false;
+    const needImages = mode === 'base64' || wantFrame;
+    const buffers = new Map();
     const failedImages = [];
 
-    if (mode === 'base64') {
+    if (needImages) {
       await Promise.all(
         tiles.map(async (tile) => {
           try {
@@ -221,7 +387,9 @@ export async function nasaNameGenerator(rawName, options = {}) {
               binary: true,
               accept: 'image/webp,image/*,*/*;q=0.8',
             });
-            tile.image = `data:${type};base64,${buffer.toString('base64')}`;
+            buffers.set(tile.tile, buffer);
+            tile.image =
+              mode === 'base64' ? `data:${type};base64,${buffer.toString('base64')}` : tile.url;
           } catch {
             tile.image = tile.url;
             failedImages.push(tile.tile);
@@ -232,8 +400,25 @@ export async function nasaNameGenerator(rawName, options = {}) {
       for (const tile of tiles) tile.image = tile.url;
     }
 
+    let frame = null;
+    let frameError = null;
+
+    if (wantFrame) {
+      if (buffers.size !== tiles.length) {
+        frameError = 'Frame skipped because some tile images failed to download';
+      } else {
+        try {
+          frame = await buildFrame(tiles, buffers);
+        } catch (error) {
+          frameError = `Frame skipped: ${error.message}`;
+        }
+      }
+    }
+
     const sequence = tiles.map((tile) => tile.tile.split('_')[1]).join('');
     const shareUrl = `${BASE_URL}/${encodeURIComponent(name)}${sequence ? `?v=${sequence}` : ''}`;
+    const payload = { data: tiles };
+    if (frame) payload.frame = frame;
 
     return [
       {
@@ -245,10 +430,9 @@ export async function nasaNameGenerator(rawName, options = {}) {
         shareUrl,
         generatedAt: new Date().toISOString(),
         ...(failedImages.length ? { failedImages } : {}),
+        ...(frameError ? { frameError } : {}),
       },
-      {
-        data: tiles,
-      },
+      payload,
     ];
   } catch (error) {
     const status = error.status >= 400 && error.status < 600 ? error.status : 500;
@@ -271,25 +455,53 @@ async function main() {
   const args = process.argv.slice(2);
   const flags = new Set(args.filter((arg) => arg.startsWith('--')));
   const outFlag = args.find((arg) => arg.startsWith('--out='));
+  const frameFlag = args.find((arg) => arg.startsWith('--frame='));
   const name = args.filter((arg) => !arg.startsWith('--')).join(' ');
 
   if (!name || flags.has('--help')) {
-    console.log('Usage: node scrape-nasaNameGenerator.js "Name" [--url] [--out=result.json]');
+    console.log(
+      'Usage: node scrape-nasaNameGenerator.js "Name" [--url] [--no-frame] [--no-preview] [--preview] [--out=result.json] [--frame=result.webp]',
+    );
     process.exitCode = name ? 0 : 1;
     return;
   }
 
   const mode = flags.has('--url') ? 'url' : 'base64';
-  const result = await nasaNameGenerator(name, { mode });
+  const result = await nasaNameGenerator(name, {
+    mode,
+    frame: !flags.has('--no-frame'),
+  });
   const outPath = resolve(outFlag ? outFlag.slice(6) : 'result.json');
 
   await writeFile(outPath, `${JSON.stringify(result, null, 2)}\n`);
 
   const [meta, payload] = result;
+  let framePath = null;
+
+  if (payload.frame) {
+    const defaultFrame = `${outPath.replace(/\.[^./\\]+$/, '')}.webp`;
+    framePath = resolve(frameFlag ? frameFlag.slice(8) : defaultFrame);
+    await writeFile(framePath, Buffer.from(payload.frame.image.split(',')[1], 'base64'));
+  }
+
   console.log(`[${meta.status} ${meta.response}] ${meta.name ?? name} - ${payload.data.length} tile(s)`);
   if (meta.shareUrl) console.log(`Share: ${meta.shareUrl}`);
   if (meta.error) console.error(meta.error);
   console.log(`Saved: ${outPath}`);
+  if (framePath) console.log(`Frame: ${framePath} (${payload.frame.width}x${payload.frame.height})`);
+  if (meta.frameError) console.error(meta.frameError);
+
+  const wantsPreview =
+    Boolean(payload.frame) && !flags.has('--no-preview') && !process.env.NO_COLOR;
+  const canPreview = flags.has('--preview') || process.stdout.isTTY;
+
+  if (wantsPreview && canPreview) {
+    const columns = Math.max(
+      40,
+      Math.min((process.stdout.columns || 100) - 2, MAX_PREVIEW_COLUMNS),
+    );
+    process.stdout.write(`\n${await previewFrame(payload.frame, columns)}`);
+  }
 
   if (meta.status !== 200) process.exitCode = 1;
 }
