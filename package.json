@@ -1,0 +1,14 @@
+{
+  "name": "kumpulan-scraper-v2",
+  "private": true,
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "scripts": {
+    "test": "node --test scrapers.test.js",
+    "test:live": "node --test scrapers.live.test.js"
+  },
+  "dependencies": {
+    "cheerio": "1.2.0"
+  }
+}
