@@ -85,8 +85,6 @@ Setiap file `scrape-siputzx-*.js` menangani satu endpoint. URL, parameter, dan c
 | Anime (metadata) | 2 | Maker | 1 |
 | Random | 2 | Sticker | 1 |
 
-Dari 197 rute di [Playground Siputzx](https://app.siputzx.my.id/playground), 176 pernah diuji: 114 menjadi modul dan 62 belum lolos. Sebanyak 21 rute sengaja tidak diuji, antara lain rute yang memerlukan cookie atau tidak punya sampel berizin. Hasil uji tidak menjamin layanan pihak ketiga selalu tersedia.
-
 ## Pengujian
 
 ```sh
