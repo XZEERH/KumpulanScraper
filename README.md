@@ -1,28 +1,27 @@
-# Kumpulan Scraper v2
+# KumpulanScraperv2
 
-Koleksi skrip Node.js untuk mencari data publik, membaca katalog, mengambil metadata dan tautan media, serta membuat gambar. Semua file `scrape-*.js` ada di [`scrapers/`](scrapers/). Modul baru dapat dipanggil lewat CLI atau diimpor sebagai fungsi CommonJS.
+Kumpulan **249 skrip Node.js terdokumentasi** untuk mencari data publik, membaca katalog, mengambil metadata dan tautan media, serta membuat gambar. Modul baru bisa dijalankan lewat CLI atau diimpor sebagai fungsi CommonJS.
 
-Koleksi berisi **184 skrip**: 114 modul Siputzx, 6 modul FreeAPI.pro, 18 integrasi lain, dan 46 skrip lama. Modul Siputzx dan FreeAPI.pro menggunakan endpoint publik yang lolos pengujian tanpa API key atau cookie. Skrip lama memiliki dependensi, format keluaran, dan syarat akses masing-masing.
+Modul Siputzx, FreeAPI.pro, Kangwifi, dan ApiKu memakai endpoint publik tanpa API key atau cookie. Alternatif untuk fitur yang sama, seperti cuaca, tersedia di folder penyedia masing-masing.
 
 ## Struktur Folder
 
-```text
-scrapers/
-  siputzx/        # Satu file per endpoint, dipisah menurut kategori
-  freeapi/        # Modul dari dokumentasi publik FreeAPI.pro
-  integrations/   # Integrasi lain, seperti EQuran, Frankfurter, dan AniList
-  legacy/         # Koleksi scraper lama
-  lib/            # Helper HTTP, validasi, dan CLI
-tests/            # Uji offline dan live
-```
+| Folder | Skrip | Isi |
+| --- | ---: | --- |
+| [`scrapers/siputzx/`](scrapers/siputzx/) | 114 | Canvas, kuis, AI, pencarian, berita, dan media |
+| [`scrapers/apiku/`](scrapers/apiku/) | 41 | Hadits, Al-Qur'an, jadwal salat, aksara Jawa, BMKG, dan jadwal TV |
+| [`scrapers/kangwifi/`](scrapers/kangwifi/) | 24 | API sumber publik dari katalog Kangwifi, seperti Wikipedia, arXiv, dan App Store |
+| [`scrapers/integrations/`](scrapers/integrations/) | 18 | Integrasi lain, seperti EQuran, Frankfurter, dan AniList |
+| [`scrapers/freeapi/`](scrapers/freeapi/) | 6 | Text-to-speech, tulisan tangan, Wikipedia ke PDF, dan gambar AI |
+| [`scrapers/legacy/`](scrapers/legacy/) | 46 | Koleksi lama dengan dependensi dan format keluaran masing-masing |
+
+Helper bersama ada di [`scrapers/lib/`](scrapers/lib/), sedangkan uji offline dan live ada di [`tests/`](tests/). Nama file memakai `scrape-<fitur>.js`; penyedia dan kategori dibedakan lewat jalur folder.
 
 ## Instalasi
 
-Gunakan Node.js **20.18.1 atau lebih baru** dan npm.
+Gunakan Node.js **20.18.1 atau lebih baru** dan npm. Clone repositori ini atau unduh ZIP lewat menu **Code** di GitHub, lalu jalankan dari folder proyek:
 
 ```sh
-git clone https://github.com/Lmavour/KumpulanScraperv2.git
-cd KumpulanScraperv2
 npm ci
 ```
 
@@ -30,7 +29,7 @@ Jika PowerShell memblokir `npm.ps1`, gunakan `npm.cmd ci` dan `npm.cmd test`. `n
 
 ## Cara Pakai
 
-Jalankan contoh berikut dari root repo. Modul baru menyediakan `--help` untuk melihat argumen yang didukung. Brave tidak diperlukan untuk menjalankan modul Siputzx.
+Jalankan contoh berikut dari root repo. Gunakan `--help` untuk melihat argumen modul. Contoh di bawah berjalan langsung di Node.js tanpa Brave.
 
 ```sh
 node scrapers/siputzx/ai/scrape-glm47flash.js --help
@@ -51,30 +50,34 @@ node scrapers/integrations/scrape-anilist.js "One Piece" --type manga --limit 3
 
 Untuk scraper lama, tambahkan awalan `scrapers/legacy/` ke nama file saat menjalankannya dari root.
 
-Contoh pemakaian sebagai modul dari file JavaScript di root:
+### Impor CommonJS
+
+Contoh dari file JavaScript di root proyek:
 
 ```js
-const { infoCuaca } = require('./scrapers/siputzx/info/scrape-cuaca');
+const { quranSurat } = require('./scrapers/apiku/quran/scrape-surat');
 
 async function main() {
-  const hasil = await infoCuaca({ q: 'pasiran jaya' });
+  const hasil = await quranSurat({ nomor: 112, timeout: 10000 });
   if (!hasil.status) {
     console.error(hasil.message);
     process.exitCode = 1;
     return;
   }
 
-  console.log(hasil.data.wilayah);
+  console.log(hasil.data.namaLatin, hasil.data.ayat.length);
 }
 
 main();
 ```
 
-Modul Siputzx tidak otomatis mengirim permintaan saat diimpor. CLI mengeluarkan JSON, dan keluar dengan kode `1` jika permintaan gagal. Downloader mengembalikan metadata dan tautan, bukan menyimpan file otomatis. Hasil Canvas berisi `data.mimeType` dan `data.base64`; input gambar harus berasal dari host publik yang didukung.
+Modul baru tidak otomatis mengirim permintaan saat diimpor. Untuk pemanggilan di atas, `status: true` menandakan hasil tersedia di `data`; jika gagal, baca `message`. CLI menampilkan hasil dalam JSON dan memakai kode keluar `1` saat gagal. Gunakan `--timeout <ms>` untuk membatasi waktu tunggu atau `--no-cache` untuk menonaktifkan penggunaan cache lokal.
 
 ## Cakupan Siputzx
 
-Setiap file `scrapers/siputzx/<kategori>/scrape-*.js` menangani satu endpoint. Nama provider dan kategori cukup ditulis di jalur folder, bukan di nama file. URL, parameter, dan contoh penggunaan ada di file masing-masing. [`scraper-utils.js`](scrapers/lib/scraper-utils.js) menangani permintaan HTTP, validasi, dan CLI, tanpa menyimpan daftar endpoint.
+Setiap file `scrapers/siputzx/<kategori>/scrape-*.js` menangani satu endpoint. URL, parameter, dan contoh penggunaan ada di file masing-masing. [`scraper-utils.js`](scrapers/lib/scraper-utils.js) menangani permintaan HTTP, validasi, dan CLI, tanpa menyimpan daftar endpoint.
+
+Downloader mengembalikan metadata dan tautan, bukan menyimpan file otomatis. Hasil Canvas berisi `data.mimeType` dan `data.base64`; input gambar harus berasal dari host publik yang didukung.
 
 | Kategori | Modul | Kategori | Modul |
 | --- | ---: | --- | ---: |
@@ -99,17 +102,60 @@ node scrapers/freeapi/scrape-wikipdf.js --query "Example.com"
 
 MP3, PNG, dan PDF dikembalikan sebagai `data.base64` beserta `data.mimeType`, tanpa menyimpan file otomatis. Respons biner dibatasi 2 MiB. SpeechSter ditujukan untuk penggunaan nonkomersial; hormati [ketentuan penyedia](https://freeapi.pro/terms) dan lisensi konten Wikipedia.
 
+## Katalog Kangwifi
+
+[`scrapers/kangwifi/`](scrapers/kangwifi/) berisi modul yang ditulis untuk API sumber publik yang tercantum di atau dirujuk dari [katalog `Yz776/apis`](https://github.com/Yz776/apis). Modul tidak menjalankan server Bun dari repo tersebut. Alternatif dapat hidup berdampingan dengan scraper yang sudah ada, misalnya prakiraan BMKG langsung berdasarkan kode `adm4` dan pencarian cuaca Siputzx berdasarkan nama wilayah.
+
+```sh
+node scrapers/kangwifi/search/scrape-wikipedia.js --q Indonesia --lang id --limit 3
+node scrapers/kangwifi/search/scrape-appstore.js --query Keynote --country ID
+node scrapers/kangwifi/tools/scrape-bmkg-cuaca.js --adm4 31.71.03.1001
+node scrapers/kangwifi/info/scrape-crossref.js --q "machine learning" --limit 3
+```
+
+Modul lain mencakup jurnal arXiv, kamus Inggris, kalender libur, kurs harian, QR PNG, data ISS, serta katalog Pokemon dan seri TV. Ikuti batas akses dan atribusi penyedia; untuk ExchangeRate-API, gunakan hasil untuk konversi, bukan mendistribusikan ulang kurs.
+
+## IrengCloud ApiKu
+
+Satu file di [`scrapers/apiku/`](scrapers/apiku/) menangani satu rute dari [Swagger ApiKu](https://apiku.irengcloud.com/docs/).
+
+| Folder | Modul | Fitur |
+| --- | ---: | --- |
+| [`hadits/`](scrapers/apiku/hadits/) | 4 | Daftar kitab, hadits per imam, detail, dan pencarian |
+| [`quran/`](scrapers/apiku/quran/) | 4 | Daftar surah, ayat dan audio, tafsir, dan pencarian terjemahan |
+| [`sholat/`](scrapers/apiku/sholat/) | 2 | Daftar kota dan jadwal salat bulanan |
+| [`islami/`](scrapers/apiku/islami/) | 6 | Naskah khutbah MUI, katalog kitab maulid, bacaan tahlil, dan arsip NU |
+| [`aksara/`](scrapers/apiku/aksara/) | 2 | Transliterasi Latin ke aksara Jawa dan sebaliknya |
+| [`lirik/`](scrapers/apiku/lirik/) | 2 | Pencarian lagu dan lirik biasa atau sinkron (LRC) jika tersedia |
+| [`bmkg/`](scrapers/apiku/bmkg/) | 3 | Gempa terbaru, gempa dirasakan, dan cuaca per desa atau kelurahan |
+| [`tv/`](scrapers/apiku/tv/) | 4 | Daftar channel, jadwal, acara sedang tayang, dan siaran sepak bola |
+| [`anime/`](scrapers/apiku/anime/) | 7 | Metadata katalog Animasu dan Otakudesu, tanpa pemutar |
+| [`manga/`](scrapers/apiku/manga/) | 2 | Metadata Komiku, tanpa tautan halaman baca |
+| [`downloader/`](scrapers/apiku/downloader/) | 3 | Tautan media dari unggahan publik TikTok dan X/Twitter, tanpa menyimpan file |
+| [`info/`](scrapers/apiku/info/) | 2 | Ringkasan profil publik Enka dan uptime ApiKu |
+
+```sh
+node scrapers/apiku/hadits/scrape-search.js --q sabar --limit 3
+node scrapers/apiku/quran/scrape-surat.js --nomor 112
+node scrapers/apiku/aksara/scrape-latin-to-jawa.js --text "Sugeng enjing"
+node scrapers/apiku/bmkg/scrape-cuaca.js --adm4 31.71.03.1001
+node scrapers/apiku/tv/scrape-schedule.js --channel sctv
+```
+
 ## Pengujian
 
 ```sh
 npm test
 ```
 
-Uji offline memakai respons tiruan dan tidak membutuhkan akses internet. Uji live di bawah ini sengaja dijalankan terpisah karena menghubungi layanan publik dan bisa gagal akibat perubahan layanan atau gangguan jaringan.
+Uji offline memakai respons tiruan dan tidak membutuhkan akses internet setelah dependensi terpasang. Uji live bersifat opsional: jalankan semuanya atau pilih penyedia tertentu. Hasilnya bergantung pada kondisi layanan pihak ketiga.
 
 ```sh
 npm run test:live
-node --test --test-name-pattern="^Siputzx Tambahan " tests/scrapers.live.test.js
+node --test --test-name-pattern="^Siputzx " tests/scrapers.live.test.js
+node --test --test-name-pattern="^FreeAPI " tests/scrapers.live.test.js
+node --test --test-name-pattern="^Kangwifi " tests/scrapers.live.test.js
+node --test --test-name-pattern="^ApiKu " tests/scrapers.live.test.js
 ```
 
 ## Ketentuan Penggunaan
@@ -120,4 +166,6 @@ node --test --test-name-pattern="^Siputzx Tambahan " tests/scrapers.live.test.js
 
 ## Kredit dan Lisensi
 
-Kontribusi asli yang hak ciptanya dimiliki **lmavour** dilisensikan di bawah [MIT](LICENSE). Lisensi tersebut tidak mencakup kode pihak ketiga, API, data, atau media yang diambil melalui scraper. Kredit pembuat skrip lama, termasuk **Razeerh**, tetap ada di header masing-masing. Jika suatu skrip pihak ketiga tidak menyebutkan lisensinya, jangan mengasumsikan izin untuk mendistribusikan ulang skrip tersebut.
+[Lisensi MIT](LICENSE) berlaku untuk kontribusi asli yang dirilis di **KumpulanScraperv2** dengan izin pemegang hak cipta. Proyek ini tidak mengklaim kepemilikan atas kode pihak ketiga, API, data, atau media yang diakses melalui scraper.
+
+Kredit pembuat asli, termasuk **Razeerh**, tetap tercantum di header skrip masing-masing. Jika suatu skrip pihak ketiga tidak menyebutkan lisensinya, jangan mengasumsikan izin untuk mendistribusikannya ulang.

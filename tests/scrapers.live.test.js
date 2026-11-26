@@ -89,6 +89,96 @@ const checks = [
     (result) => assert.match(result.data.results[0]?.name, /panadol/i)]
 ];
 
+const kangwifi = [
+  ['search/wikipedia', 'wikipedia', { q: 'Indonesia', lang: 'id', limit: 2 }, (data) => assert.ok(data.results.length)],
+  ['search/appstore', 'appstore', { query: 'Keynote', country: 'ID', limit: 2 }, (data) => assert.ok(data.results.some(({ name }) => /keynote/i.test(name)))],
+  ['tools/gempa', 'gempa', {}, (data) => assert.ok(Number.isFinite(data.magnitude))],
+  ['tools/bmkg-cuaca', 'bmkgCuaca', { adm4: '31.71.03.1001' }, (data) => assert.ok(data.forecasts.length)],
+  ['info/arxiv', 'arxiv', { q: 'machine learning', limit: 1 }, (data) => assert.ok(data.results[0]?.authors.length)],
+  ['info/crossref', 'crossref', { q: 'machine learning', limit: 2 }, (data) => assert.match(data.results[0]?.doi, /^10\./)],
+  ['info/dictionary', 'dictionary', { word: 'hello' }, (data) => assert.ok(data.entries[0]?.meanings.length)],
+  ['info/holidays', 'holidays', { country: 'ID', year: 2026 }, (data) => assert.ok(data.results.length)],
+  ['info/dog-ceo', 'dogImages', { breed: 'retriever/golden', count: 2 }, (data) => assert.equal(data.images.length, 2)],
+  ['info/cat-facts', 'catFacts', { count: 2 }, (data) => assert.equal(data.facts.length, 2)],
+  ['info/dog-facts', 'dogFacts', { count: 2 }, (data) => assert.ok(data.facts.length)],
+  ['info/advice', 'advice', {}, (data) => assert.ok(data.advice.trim())],
+  ['info/affirmation', 'affirmation', {}, (data) => assert.ok(data.affirmation.trim())],
+  ['info/useless-fact', 'uselessFact', { lang: 'de' }, (data) => assert.ok(data.text.trim())],
+  ['info/joke', 'joke', {}, (data) => assert.ok(data.setup.trim() && data.punchline.trim())],
+  ['info/pokemon', 'pokemon', { name: 'pikachu' }, (data) => assert.ok(data.types.includes('electric'))],
+  ['info/pokemon-list', 'pokemonList', { limit: 2, offset: 0 }, (data) => assert.equal(data.results.length, 2)],
+  ['info/rickandmorty', 'rickAndMorty', { name: 'rick' }, (data) => assert.ok(data.results.length)],
+  ['info/swapi', 'starWars', { name: 'Luke Skywalker' }, (data) => assert.equal(data.results[0]?.name, 'Luke Skywalker')],
+  ['info/tv-maze', 'tvMaze', { q: 'Sherlock', limit: 2 }, (data) => assert.ok(data.results.length)],
+  ['info/xkcd', 'xkcd', { id: 614 }, (data) => assert.equal(data.id, 614)],
+  ['info/exchangerate', 'exchangeRate', { base: 'USD', target: 'IDR', amount: 2 }, (data) => assert.ok(data.converted > 0)],
+  ['info/qr-api', 'qrCode', { text: 'Contoh KumpulanScraperv2', size: 200 }, (data) => {
+    assert.equal(data.mimeType, 'image/png');
+    assert.equal(Buffer.from(data.base64, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  }],
+  ['info/iss-location', 'issLocation', {}, (data) => assert.ok(data.timestamp > 0)]
+];
+for (const [route, name, input, verify] of kangwifi) {
+  const [category, file] = route.split('/');
+  checks.push([`Kangwifi ${route}`, () => require(`../scrapers/kangwifi/${category}/scrape-${file}`)[name]({ ...options, ...input }),
+    (result) => verify(result.data)]);
+}
+
+const apiku = [
+  ['hadits/books', {}, (data) => assert.equal(data.length, 9)],
+  ['hadits/search', { q: 'sabar', limit: 2, page: 1 }, (data) => assert.ok(data.results.length)],
+  ['hadits/list', { imam: 'bukhari', limit: 2, page: 1 }, (data) => assert.equal(data.results[0]?.number, 1)],
+  ['hadits/detail', { imam: 'bukhari', number: 1 }, (data) => assert.equal(data.number, 1)],
+  ['sholat/jadwal', { kota: 'Bogor', bulan: 11, tahun: 2026 }, (data) => assert.equal(data.jadwal_bulanan.length, 30)],
+  ['sholat/kota', { q: 'Bogor' }, (data) => assert.ok(data.some(({ kota }) => /bogor/i.test(kota)))],
+  ['quran/surat-list', {}, (data) => assert.equal(data.length, 114)],
+  ['quran/surat', { nomor: 112 }, (data) => assert.equal(data.ayat.length, 4)],
+  ['quran/tafsir', { nomor: 112 }, (data) => assert.equal(data.tafsir.length, 4)],
+  ['quran/search', { q: 'sabar', page: 1, size: 2 }, (data) => assert.ok(data.results.length)],
+  ['islami/khutbah', { page: 1, limit: 2 }, (data) => assert.equal(data.results.length, 2)],
+  ['islami/khutbah-detail', {
+    url: 'https://mui.or.id/baca/khutbah/khutbah-jumat-cermin-kesempurnaan-iman-dimulai-dari-kasih-sayang-pada-keluarga'
+  }, (data) => assert.ok(data.paragraphs.length)],
+  ['islami/maulid-books', {}, (data) => assert.equal(data.length, 7)],
+  ['islami/tahlil', { page: 1, limit: 2 }, (data) => assert.equal(data.data.length, 2)],
+  ['islami/tahlil-detail', { number: 1 }, (data) => assert.equal(data.verse.number, 1)],
+  ['islami/nu-download', { category: 'produk-hukum' }, (data) => assert.ok(data.results.some(({ type }) => /^pdf$/i.test(type)))],
+  ['aksara/latin-to-jawa', { text: 'Sugeng enjing', murda: 'false' }, (data) => assert.match(data.output, /[\uA980-\uA9DF]/u)],
+  ['aksara/jawa-to-latin', { text: '\ua9b1\ua9b8\ua992\ua9bc\ua981' }, (data) => assert.match(data.output, /[a-z]/i)],
+  ['lirik/search', { q: 'Twinkle Twinkle Little Star' }, (data) => assert.ok(data.length)],
+  ['lirik/detail', { judul: 'Yellow', artis: 'Coldplay' }, (data) => assert.match(data.judul, /^yellow$/i)],
+  ['bmkg/gempa', {}, (data) => assert.ok(data.latest?.DateTime)],
+  ['bmkg/gempa-dirasakan', {}, (data) => assert.ok(data.events.length)],
+  ['bmkg/cuaca', { adm4: '31.71.03.1001' }, (data) => assert.equal(data.lokasi.adm4, '31.71.03.1001')],
+  ['tv/channels', {}, (data) => assert.ok(data.some(({ id }) => id === 'sctv'))],
+  ['tv/schedule', { channel: 'sctv' }, (data) => assert.ok(data.programs.length)],
+  ['tv/now', {}, (data) => assert.ok(Array.isArray(data))],
+  ['tv/football', {}, (data) => assert.ok(Array.isArray(data))],
+  ['anime/animasu/home', { page: 1 }, (data) => assert.ok(data.ongoing.length || data.updated.length)],
+  ['anime/animasu/search', { q: 'Naruto' }, (data) => assert.ok(data.length)],
+  ['anime/animasu/detail', { slug: 'sora-wa-akai-kawa-no-hotori' }, (data) => assert.ok(data.title)],
+  ['anime/otakudesu/home', {}, (data) => assert.ok(data.ongoing.length || data.complete.length)],
+  ['anime/otakudesu/schedule', {}, (data) => assert.ok(data.some(({ titles }) => titles.length))],
+  ['anime/otakudesu/search', { q: 'Naruto' }, (data) => assert.ok(data.length)],
+  ['anime/otakudesu/detail', { slug: 'koori-jouheki-s2-sub-indo' }, (data) => assert.ok(data.title)],
+  ['manga/komiku/home', {}, (data) => assert.ok(data.ranking.length)],
+  ['manga/komiku/detail', { slug: 'archmage-restaurant' }, (data) => assert.ok(data.chapterCount > 0)],
+  ['downloader/tiktok', { url: tiktok }, (data) => assert.ok(data.videoUrl)],
+  ['downloader/tiktok2', { url: tiktok }, (data) => assert.ok(data.videoUrl)],
+  ['downloader/twitter', { url: 'https://twitter.com/NASAPersevere/status/1363929492138254340' },
+    (data) => assert.ok(data.media.some(({ extension }) => extension === 'mp4'))],
+  ['info/enka', { uid: '1810139094' }, (data) => assert.equal(data.uid, '1810139094')],
+  ['info/uptime', {}, (data) => assert.ok(data.uptimeSeconds >= 0)]
+];
+for (const [route, input, verify] of apiku) {
+  const segments = route.split('/');
+  const file = segments.pop();
+  checks.push([`ApiKu ${route}`, () => {
+    const [scrape] = Object.values(require(`../scrapers/apiku/${segments.join('/')}/scrape-${file}`));
+    return scrape({ timeout: 25000, cache: false, ...input });
+  }, (result) => verify(result.data)]);
+}
+
 const demoImage = 'https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png';
 const demoBackground = 'https://placehold.co/400x300.png';
 const demoAvatar = { username: 'Demo', avatar: demoImage };

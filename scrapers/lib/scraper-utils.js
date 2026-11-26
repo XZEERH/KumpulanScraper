@@ -220,21 +220,33 @@ async function runCLI(source, usage, handler, flags = [], booleanFlags = [], { a
   }
 }
 
+function runOptionsCLI(source, argsHelp, handler, flags = [], endpoint) {
+  const script = relative(process.cwd(), process.argv[1]).split(sep).join('/');
+  const command = /\s/.test(script) ? `"${script}"` : script;
+  const usage = `Usage: node ${command}${argsHelp ? ` ${argsHelp}` : ''}${endpoint ? `\nEndpoint: ${endpoint}` : ''}`;
+  return runCLI(source, usage, (args) => {
+    if (args._.length) throw new Error(usage);
+    return handler(args);
+  }, flags, [], { allowEmpty: true });
+}
+
 function endpointModule(url, {
   source, params = {}, interval, timeout, cache = true,
   image = false,
+  checkParams,
+  selectData = (payload) => payload?.status === true ? payload.data : null,
   mapData = (data) => data,
   validateData = (data) => data !== null && typeof data === 'object'
 }) {
-  const endpoint = new URL(url).pathname.replace(/^\/(?:api\/)?/, '');
+  const endpoint = decodeURI(new URL(url).pathname).replace(/^\/(?:api\/)?/, '');
   const parameters = Object.entries(params);
 
   async function scrape(options = {}) {
     try {
       const { timeout: requestTimeout = timeout } = options;
-      const query = {};
+      const values = {};
       for (const [name, rule] of parameters) {
-        const value = options[name];
+        const value = options[name] === undefined ? rule.default : options[name];
         if (value === undefined && !rule.required) continue;
         if (rule.type === 'https-url' || rule.type === 'image-url') {
           const input = text(value, name, rule.maxLength ?? 2000);
@@ -247,31 +259,39 @@ function endpointModule(url, {
           else for (const key of new Set(target.searchParams.keys())) {
             if (!rule.queryKeys.includes(key)) target.searchParams.delete(key);
           }
-          query[name] = target.href;
+          values[name] = target.href;
         } else if (rule.choices) {
           const selected = text(value, name).toLowerCase();
           const canonical = rule.choices.find((option) => option.toLowerCase() === selected);
           if (canonical === undefined) throw new Error(`${name} harus salah satu: ${rule.choices.join(', ')}`);
-          query[name] = canonical;
+          values[name] = canonical;
         } else if (rule.type === 'number') {
           const number = typeof value === 'number' ? value : Number(text(value, name));
           if (!Number.isFinite(number) || number < rule.min || number > rule.max) {
             throw new Error(`${name} harus angka antara ${rule.min} dan ${rule.max}`);
           }
-          query[name] = number;
-        } else if (rule.min !== undefined) query[name] = integer(value, NaN, rule.min, rule.max, name);
+          values[name] = number;
+        } else if (rule.min !== undefined) values[name] = integer(value, NaN, rule.min, rule.max, name);
         else {
           const input = text(value, name, rule.maxLength ?? 300);
           if (rule.pattern && !rule.pattern.test(input)) throw new Error(`${name} tidak sesuai format`);
-          query[name] = rule.normalize ? rule.normalize(input) : input;
+          values[name] = rule.normalize ? rule.normalize(input) : input;
         }
       }
-      const payload = await request(urlWithParams(url, query), {
+      checkParams?.(values);
+      const query = { ...values };
+      const target = url.replace(/\{(\w+)\}/g, (_, name) => {
+        if (!Object.hasOwn(query, name)) throw new Error(`Parameter ${name} wajib diisi`);
+        delete query[name];
+        return encodeURIComponent(values[name]);
+      });
+      const payload = await request(urlWithParams(target, query), {
         timeout: requestTimeout, interval, cache: cache && options.cache !== false, redirect: 'error',
         ...(image ? { format: 'binary', headers: { Accept: 'image/png, image/jpeg, image/gif, image/webp' } } : {})
       });
-      const data = image ? imageData(payload) : payload?.status === true ? mapData(payload.data) : null;
-      if (data == null || !validateData(data)) {
+      const selected = image ? imageData(payload) : selectData(payload);
+      const data = selected == null || image ? selected : mapData(selected, values);
+      if (data == null || !validateData(data, values)) {
         throw new Error('Layanan tidak mengembalikan data yang valid');
       }
       return { status: true, source, endpoint, timestamp: image ? null : (payload.timestamp ?? null), data };
@@ -286,13 +306,7 @@ function endpointModule(url, {
       const flag = `--${name} <${value}>`;
       return rule.required ? flag : `[${flag}]`;
     });
-    const script = relative(process.cwd(), process.argv[1]).split(sep).join('/');
-    const command = /\s/.test(script) ? `"${script}"` : script;
-    const usage = `Usage: node ${command}${flags.length ? ` ${flags.join(' ')}` : ''}\nEndpoint: ${endpoint}`;
-    return runCLI(source, usage, (args) => {
-      if (args._.length) throw new Error(usage);
-      return scrape(args);
-    }, parameters.map(([name]) => name), [], { allowEmpty: true });
+    return runOptionsCLI(source, flags.join(' '), scrape, parameters.map(([name]) => name), endpoint);
   }
 
   return { scrape, cli };
@@ -306,4 +320,16 @@ function imageEndpoint(url, options) {
   return endpointModule(url, { ...options, image: true });
 }
 
-module.exports = { request, text, hasText, integer, choice, isoDate, urlWithParams, httpsUrl, publicImageUrl, imageData, failure, runCLI, jsonEndpoint, imageEndpoint };
+function apikuEndpoint(url, options) {
+  return jsonEndpoint(url, {
+    source: 'apiku', interval: 2000,
+    selectData: (payload) => (payload?.success ?? (payload?.status === 'success')) === true ? payload : null,
+    mapData: ({ data }) => data,
+    ...options
+  });
+}
+
+module.exports = {
+  request, text, hasText, integer, choice, isoDate, urlWithParams, httpsUrl, publicImageUrl, imageData,
+  failure, runCLI, runOptionsCLI, jsonEndpoint, imageEndpoint, apikuEndpoint
+};

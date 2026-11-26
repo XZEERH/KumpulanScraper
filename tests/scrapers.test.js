@@ -4,7 +4,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const { readFileSync, readdirSync } = require('node:fs');
-const { join } = require('node:path');
+const { join, relative, sep } = require('node:path');
 const { request, integer, isoDate, imageEndpoint } = require('../scrapers/lib/scraper-utils');
 
 const root = join(__dirname, '..');
@@ -27,7 +27,17 @@ const modules = [
   ['scrapers/freeapi/scrape-wikipdf.js', 'freeapiWikiPdf'],
   ['scrapers/freeapi/scrape-tti.js', 'freeapiTextToImage'],
   ['scrapers/freeapi/scrape-medster-search.js', 'freeapiMedicineSearch']
-]);
+], [
+  ['search/wikipedia', 'wikipedia'], ['search/appstore', 'appstore'], ['tools/gempa', 'gempa'], ['tools/bmkg-cuaca', 'bmkgCuaca'],
+  ['info/arxiv', 'arxiv'], ['info/crossref', 'crossref'], ['info/dictionary', 'dictionary'], ['info/holidays', 'holidays'],
+  ['info/dog-ceo', 'dogImages'], ['info/cat-facts', 'catFacts'], ['info/dog-facts', 'dogFacts'], ['info/advice', 'advice'],
+  ['info/affirmation', 'affirmation'], ['info/useless-fact', 'uselessFact'], ['info/joke', 'joke'], ['info/pokemon', 'pokemon'],
+  ['info/pokemon-list', 'pokemonList'], ['info/rickandmorty', 'rickAndMorty'], ['info/swapi', 'starWars'], ['info/tv-maze', 'tvMaze'],
+  ['info/xkcd', 'xkcd'], ['info/exchangerate', 'exchangeRate'], ['info/qr-api', 'qrCode'], ['info/iss-location', 'issLocation']
+].map(([route, name]) => {
+  const [category, file] = route.split('/');
+  return [`scrapers/kangwifi/${category}/scrape-${file}.js`, name];
+}));
 const siputzxRoot = 'scrapers/siputzx';
 const categoryFolders = { d: 'downloader', m: 'maker', r: 'random', s: 'search' };
 const siputzxFiles = readdirSync(join(root, siputzxRoot), { withFileTypes: true })
@@ -36,7 +46,11 @@ const siputzxFiles = readdirSync(join(root, siputzxRoot), { withFileTypes: true 
     .filter((file) => /^scrape-.+\.js$/.test(file))
     .map((file) => `${siputzxRoot}/${name}/${file}`))
   .sort();
-const entryPoints = [...modules, ...siputzxFiles.map((file) => [file])];
+const apikuRoot = 'scrapers/apiku';
+const apikuFiles = readdirSync(join(root, apikuRoot), { withFileTypes: true, recursive: true })
+  .filter((entry) => entry.isFile() && /^scrape-.+\.js$/.test(entry.name))
+  .map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/')).sort();
+const entryPoints = [...modules, ...siputzxFiles.map((file) => [file]), ...apikuFiles.map((file) => [file])];
 const api = {};
 const nativeFetch = global.fetch;
 const networkBlock = 'data:text/javascript,' + encodeURIComponent(
@@ -93,7 +107,7 @@ for (const [file, name] of entryPoints) {
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, /Usage:/);
     assert.ok(help.stdout.includes(`node ${file}`));
-    if (!name) {
+    if (file.startsWith(`${siputzxRoot}/`)) {
       const endpoint = help.stdout.match(/^Endpoint: ([^\r\n]+)$/m)?.[1];
       assert.ok(endpoint);
       const [group, ...segments] = endpoint.split('/');
@@ -110,12 +124,225 @@ for (const [file, name] of entryPoints) {
       assert.ok(header.includes(` * Note : node ${file}`));
       assert.ok(code.includes(`const ENDPOINT = 'https://api.siputzx.my.id/api/${endpoint}';`));
       assert.ok(code.includes("require('../../lib/scraper-utils')"));
+    } else if (file.startsWith(`${apikuRoot}/`)) {
+      const endpoint = help.stdout.match(/^Endpoint: ([^\r\n]+)$/m)?.[1];
+      assert.ok(endpoint?.startsWith('v1/'));
+      const code = readFileSync(join(root, file), 'utf8');
+      assert.ok(code.includes(`const ENDPOINT = 'https://apiku.irengcloud.com/api/${endpoint}';`));
+      assert.ok(code.includes(` * Note : node ${file}`));
     }
     const bad = spawnSync(process.execPath, ['--import', networkBlock, file, '--unknown'], childOptions);
     assert.equal(bad.status, 1);
     assert.match(JSON.parse(bad.stdout).message, /Opsi tidak dikenal/);
   });
 }
+
+test('ApiKu files use distinct endpoints and keep the provider name in the folder', () => {
+  assert.ok(apikuFiles.length >= 41);
+  const endpoints = new Set();
+  for (const file of apikuFiles) {
+    assert.doesNotMatch(file, /\/scrape-(?:apiku|irengcloud)-/i);
+    const endpoint = readFileSync(join(root, file), 'utf8').match(/^const ENDPOINT = '(https:\/\/apiku\.irengcloud\.com\/api\/v1\/[^']+)';$/m)?.[1];
+    assert.ok(endpoint);
+    assert.ok(!endpoints.has(endpoint), endpoint);
+    endpoints.add(endpoint);
+  }
+});
+
+test('ApiKu validates templated route parameters and does not forward them as query parameters', async (t) => {
+  const { haditsDetail } = require('../scrapers/apiku/hadits/scrape-detail');
+  const calls = mockHTTP(t, () => ({ success: true, data: { imam: 'bukhari', number: 1, terjemahan: 'Contoh teks.' } }));
+  assert.equal((await haditsDetail({ imam: '../books', number: 1 })).status, false);
+  assert.equal((await haditsDetail({ imam: 'bukhari', number: '1/2' })).status, false);
+  assert.equal(calls.length, 0);
+  const result = await haditsDetail({ imam: 'BUKHARI', number: '1', extra: 'not sent' });
+  assert.equal(result.status, true);
+  assert.equal(result.endpoint, 'v1/hadits/{imam}/{number}');
+  assert.equal(result.data.number, 1);
+  assert.equal(calls[0].url.href, 'https://apiku.irengcloud.com/api/v1/hadits/bukhari/1');
+  assert.equal(calls[0].options.redirect, 'error');
+});
+
+test('ApiKu handles both documented success envelopes without trusting an explicit failure', async (t) => {
+  const { tvSchedule } = require('../scrapers/apiku/tv/scrape-schedule');
+  const { latinToJawa } = require('../scrapers/apiku/aksara/scrape-latin-to-jawa');
+  const output = '\ua9b1\ua9b8\ua992\ua9bc\ua981';
+  let reject = false;
+  const calls = mockHTTP(t, (url) => url.pathname.endsWith('/tv/schedule')
+    ? { status: 'success', success: reject ? false : undefined, data: [{ time: '07:30', event: 'Contoh' }] }
+    : { success: true, input: 'Sugeng', output });
+  assert.equal((await tvSchedule({ channel: 'SCTV', cache: false })).data.programs[0].event, 'Contoh');
+  assert.equal(calls[0].url.searchParams.get('channel'), 'sctv');
+  assert.deepEqual((await latinToJawa({ text: 'Sugeng', murda: 'false' })).data, { input: 'Sugeng', output });
+  assert.equal(calls[1].url.searchParams.get('murda'), 'false');
+  reject = true;
+  assert.equal((await tvSchedule({ channel: 'SCTV', cache: false })).status, false);
+});
+
+test('ApiKu requires a search term and strips tracking from approved URL inputs', async (t) => {
+  const { lirikSearch } = require('../scrapers/apiku/lirik/scrape-search');
+  const { khutbahDetail } = require('../scrapers/apiku/islami/scrape-khutbah-detail');
+  const target = 'https://mui.or.id/baca/khutbah/contoh';
+  const calls = mockHTTP(t, (url) => url.pathname.endsWith('/khutbah/detail')
+    ? { success: true, data: { title: 'Contoh', url: target, paragraphs: ['Teks contoh.'] } }
+    : { success: true, data: [] });
+  assert.equal((await lirikSearch({})).status, false);
+  assert.equal((await khutbahDetail({ url: 'https://mui.or.id.example.test/baca/khutbah/contoh' })).status, false);
+  assert.equal((await khutbahDetail({ url: 'https://mui.or.id/redirect' })).status, false);
+  assert.equal(calls.length, 0);
+  assert.equal((await khutbahDetail({ url: `${target}?utm_test=1#heading` })).data.paragraphs[0], 'Teks contoh.');
+  assert.equal(calls[0].url.searchParams.get('url'), target);
+  assert.deepEqual((await lirikSearch({ judul: 'Judul & Contoh' })).data, []);
+  assert.equal(calls[1].url.searchParams.get('judul'), 'Judul & Contoh');
+});
+
+test('ApiKu returns allowlisted media metadata without fetching assets or dropping video attribution', async (t) => {
+  const { tiktok2 } = require('../scrapers/apiku/downloader/scrape-tiktok2');
+  const { komikuDetail } = require('../scrapers/apiku/manga/komiku/scrape-detail');
+  const watermarkUrl = 'https://f2b.snaptik.fit/demo.mp4';
+  const calls = mockHTTP(t, (url) => url.pathname.endsWith('/tiktok2')
+    ? { success: true, watermarkUrl, videoUrl: 'https://example.test/unmarked.mp4', author: { privateField: 'fixture' } }
+    : { success: true, data: { title: 'Contoh', chapters: [{ url: 'https://example.test/chapter' }], thumb: 'https://example.test/proxy' } });
+  const video = await tiktok2({ url: 'https://www.tiktok.com/@demo/video/1' });
+  assert.equal(video.status, true);
+  assert.equal(video.data.videoUrl, watermarkUrl);
+  assert.equal(video.data.author, undefined);
+  const comic = await komikuDetail({ slug: 'contoh' });
+  assert.equal(comic.data.chapterCount, 1);
+  assert.equal(comic.data.chapters, undefined);
+  assert.equal(comic.data.thumb, undefined);
+  assert.equal(calls.length, 2);
+});
+
+const kangwifiFixtures = [
+  ['wikipedia', { q: 'Indonesia & Asia' }, 'id.wikipedia.org/w/rest.php/v1/search/page',
+    { pages: [{ id: 5, key: 'Indonesia', title: 'Indonesia', excerpt: '<b>Indonesia</b> &amp; Asia' }] },
+    (data, url) => {
+      assert.equal(data.results[0].excerpt, 'Indonesia & Asia');
+      assert.equal(url.searchParams.get('q'), 'Indonesia & Asia');
+    }],
+  ['appstore', { query: 'Keynote', country: 'id' }, 'itunes.apple.com/search',
+    { results: [{ trackId: 1, trackName: 'Keynote', formattedPrice: 'Free', trackViewUrl: 'https://apps.apple.com/id/app/keynote/id1' }] },
+    (data, url) => {
+      assert.equal(data.results[0].name, 'Keynote');
+      assert.equal(url.searchParams.get('media'), 'software');
+      assert.equal(url.searchParams.get('country'), 'ID');
+    }],
+  ['gempa', {}, 'data.bmkg.go.id/DataMKG/TEWS/autogempa.json',
+    { Infogempa: { gempa: { DateTime: '2026-11-26T00:00:00Z', Wilayah: 'Contoh', Magnitude: '5.1', Shakemap: 'demo.mmi.jpg' } } },
+    (data) => {
+      assert.equal(data.magnitude, 5.1);
+      assert.equal(data.shakemap, 'https://data.bmkg.go.id/DataMKG/TEWS/demo.mmi.jpg');
+    }],
+  ['bmkgCuaca', { adm4: '31.71.03.1001' }, 'api.bmkg.go.id/publik/prakiraan-cuaca',
+    { lokasi: { adm4: '31.71.03.1001' }, data: [{ cuaca: [[{ datetime: '2026-11-26T00:00:00Z', weather_desc: 'Cerah', t: 27 }]] }] },
+    (data, url) => {
+      assert.equal(data.forecasts[0].temperatureC, 27);
+      assert.equal(url.searchParams.get('adm4'), data.location.adm4);
+    }],
+  ['arxiv', { q: 'machine learning', limit: 1 }, 'export.arxiv.org/api/query',
+    '<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>http://arxiv.org/abs/2601.00001v1</id><title> Demo   paper </title><author><name>A. Example</name></author><link title="pdf" href="https://arxiv.org/pdf/2601.00001v1" /></entry></feed>',
+    (data, url) => {
+      assert.equal(data.results[0].url, 'https://arxiv.org/abs/2601.00001v1');
+      assert.equal(data.results[0].title, 'Demo paper');
+      assert.deepEqual(data.results[0].authors, ['A. Example']);
+      assert.equal(url.searchParams.get('search_query'), 'all:"machine learning"');
+    }],
+  ['crossref', { q: 'machine learning' }, 'api.crossref.org/works',
+    { status: 'ok', message: { items: [{ DOI: '10.5555/1', title: ['Demo'], published: { 'date-parts': [[2020]] } }] } },
+    (data, url) => {
+      assert.equal(data.results[0].doi, '10.5555/1');
+      assert.deepEqual(data.results[0].published, [2020]);
+      assert.equal(url.searchParams.get('query.bibliographic'), 'machine learning');
+    }],
+  ['dictionary', { word: 'Hello' }, 'api.dictionaryapi.dev/api/v2/entries/en/hello',
+    [{ word: 'hello', meanings: [{ partOfSpeech: 'interjection', definitions: [{ definition: 'A greeting.' }] }] }],
+    (data) => assert.equal(data.entries[0].meanings[0].definitions[0].text, 'A greeting.')],
+  ['holidays', { country: 'id', year: 2026 }, 'date.nager.at/api/v3/PublicHolidays/2026/ID',
+    [{ countryCode: 'ID', date: '2026-01-01', localName: 'Tahun Baru', global: true }], (data) => assert.ok(data.results[0].national)],
+  ['dogImages', { breed: 'retriever/golden', count: 1 }, 'dog.ceo/api/breed/retriever/golden/images/random/1',
+    { status: 'success', message: ['https://images.dog.ceo/demo.jpg', 'https://images.dog.ceo.example.test/fake.jpg'] },
+    (data) => assert.deepEqual(data.images, ['https://images.dog.ceo/demo.jpg'])],
+  ['catFacts', { count: 1 }, 'catfact.ninja/facts', { data: [{ fact: 'Example fact.' }] },
+    (data, url) => {
+      assert.deepEqual(data.facts, ['Example fact.']);
+      assert.equal(url.searchParams.get('limit'), '1');
+    }],
+  ['dogFacts', {}, 'dogapi.dog/api/v2/facts', { data: [{ attributes: { body: 'Example fact.' } }] },
+    (data) => assert.deepEqual(data.facts, ['Example fact.'])],
+  ['advice', { id: 42 }, 'api.adviceslip.com/advice/42', { slip: { id: 42, advice: 'Example advice.' } },
+    (data) => assert.equal(data.id, 42)],
+  ['affirmation', {}, 'www.affirmations.dev/', { affirmation: 'Example affirmation.' },
+    (data) => assert.equal(data.affirmation, 'Example affirmation.')],
+  ['uselessFact', { lang: 'de' }, 'uselessfacts.jsph.pl/api/v2/facts/random', { id: '1', text: 'Beispiel.', language: 'de' },
+    (data, url) => {
+      assert.equal(data.text, 'Beispiel.');
+      assert.equal(url.searchParams.get('language'), 'de');
+    }],
+  ['joke', {}, 'v2.jokeapi.dev/joke/Programming', { error: false, id: 1, safe: true, setup: 'Question?', delivery: 'Answer.' },
+    (data, url) => {
+      assert.equal(data.punchline, 'Answer.');
+      assert.ok(url.searchParams.has('safe-mode'));
+    }],
+  ['pokemon', { name: 'PIKACHU' }, 'pokeapi.co/api/v2/pokemon/pikachu',
+    { id: 25, name: 'pikachu', types: [{ type: { name: 'electric' } }], abilities: [], stats: [{ stat: { name: 'speed' }, base_stat: 90 }] },
+    (data) => {
+      assert.deepEqual(data.types, ['electric']);
+      assert.equal(data.stats.speed, 90);
+    }],
+  ['pokemonList', { limit: 1, offset: 1 }, 'pokeapi.co/api/v2/pokemon/',
+    { count: 200, next: 'https://pokeapi.co/api/v2/pokemon/?offset=2', results: [{ name: 'ivysaur', url: 'https://pokeapi.co/api/v2/pokemon/2/' }] },
+    (data, url) => {
+      assert.equal(data.nextOffset, 2);
+      assert.equal(data.results[0].name, 'ivysaur');
+      assert.equal(url.searchParams.get('offset'), '1');
+    }],
+  ['rickAndMorty', { name: 'Rick' }, 'rickandmortyapi.com/api/character',
+    { info: { count: 1 }, results: [{ id: 1, name: 'Rick', origin: { name: 'Earth' } }] }, (data) => assert.equal(data.results[0].origin, 'Earth')],
+  ['starWars', { type: 'planets', name: 'Tatooine' }, 'www.swapi.tech/api/planets',
+    { result: [{ uid: '1', properties: { name: 'Tatooine' } }] }, (data) => assert.equal(data.results[0].name, 'Tatooine')],
+  ['tvMaze', { q: 'Sherlock', limit: 1 }, 'api.tvmaze.com/search/shows',
+    [{ show: { id: 1, name: 'Sherlock', summary: '<p>Example &amp; text.</p>' } }],
+    (data) => assert.equal(data.results[0].summary, 'Example & text.')],
+  ['xkcd', { id: 614 }, 'xkcd.com/614/info.0.json', { num: 614, title: 'Demo', img: 'https://imgs.xkcd.com/comics/demo.png' },
+    (data) => assert.equal(data.url, 'https://xkcd.com/614/')],
+  ['exchangeRate', { base: 'usd', target: 'idr', amount: '3' }, 'open.er-api.com/v6/latest/USD',
+    { result: 'success', base_code: 'USD', rates: { IDR: 15000, EUR: 1 } },
+    (data) => {
+      assert.equal(data.converted, 45000);
+      assert.equal(data.rates, undefined);
+    }],
+  ['qrCode', { text: 'A & B' }, 'quickchart.io/qr',
+    () => new Response(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=', 'base64'),
+      { headers: { 'Content-Type': 'image/png' } }), (data, url) => {
+    assert.equal(data.mimeType, 'image/png');
+    assert.equal(url.searchParams.get('text'), 'A & B');
+  }],
+  ['issLocation', {}, 'api.wheretheiss.at/v1/satellites/25544', { id: 25544, latitude: 0, longitude: 12, timestamp: 1795700000 },
+    (data) => assert.equal(data.latitude, 0)]
+];
+
+for (const [name, input, endpoint, payload, verify] of kangwifiFixtures) {
+  test(`Kangwifi ${name}: validates the public source response`, async (t) => {
+    const calls = mockHTTP(t, () => typeof payload === 'function' ? payload() : payload);
+    const result = await api[name]({ ...input, cache: false });
+    assert.equal(result.status, true, result.message);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url.origin + calls[0].url.pathname, `https://${endpoint}`);
+    assert.equal(calls[0].options.redirect, 'error');
+    verify(result.data, calls[0].url);
+  });
+}
+
+test('Kangwifi rejects unknown providers and invalid path, limit, and query inputs without a request', async (t) => {
+  const calls = mockHTTP(t, () => assert.fail('Request must not happen'));
+  for (const [name, input] of [
+    ['wikipedia', { q: 'Example', lang: 'example.org' }], ['pokemon', { name: '../item/1' }],
+    ['dogImages', { breed: '../test' }], ['appstore', { query: 'Example', limit: 21 }],
+    ['arxiv', { q: '" OR ti:*' }], ['bmkgCuaca', { adm4: '31.71' }], ['qrCode', { text: 'Demo', size: 900 }]
+  ]) assert.equal((await api[name](input)).status, false);
+  assert.equal(calls.length, 0);
+});
 
 test('FreeAPI voices filters by locale and limits results without sending filter parameters', async (t) => {
   const voice = { index: 1, id: 'voice-1', name: 'Demo', language: 'Indonesian', edgeVoice: 'id-ID-DemoNeural' };
