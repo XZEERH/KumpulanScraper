@@ -5,8 +5,8 @@
     "node": ">=20.18.1"
   },
   "scripts": {
-    "test": "node --test scrapers.test.js",
-    "test:live": "node --test scrapers.live.test.js"
+    "test": "node --test tests/scrapers.test.js",
+    "test:live": "node --test tests/scrapers.live.test.js"
   },
   "dependencies": {
     "cheerio": "1.2.0"

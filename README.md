@@ -1,8 +1,19 @@
 # Kumpulan Scraper v2
 
-Koleksi skrip Node.js untuk mencari data publik, membaca katalog, mengambil metadata dan tautan media, serta membuat gambar. Setiap scraper berada di file `scrape-*.js`. Modul baru dapat dipanggil lewat CLI atau diimpor sebagai fungsi CommonJS.
+Koleksi skrip Node.js untuk mencari data publik, membaca katalog, mengambil metadata dan tautan media, serta membuat gambar. Semua file `scrape-*.js` ada di [`scrapers/`](scrapers/). Modul baru dapat dipanggil lewat CLI atau diimpor sebagai fungsi CommonJS.
 
 Per 26 November 2026, koleksi berisi **178 skrip**: 114 modul Siputzx, 18 integrasi lain, dan 46 skrip lama. Modul Siputzx menggunakan endpoint publik yang lolos pengujian tanpa API key atau cookie. Skrip lama memiliki dependensi, format keluaran, dan syarat akses masing-masing.
+
+## Struktur Folder
+
+```text
+scrapers/
+  siputzx/        # Satu file per endpoint, dipisah menurut kategori
+  integrations/   # Integrasi lain, seperti EQuran, Frankfurter, dan AniList
+  legacy/         # Koleksi scraper lama
+  lib/            # Helper HTTP, validasi, dan CLI
+tests/            # Uji offline dan live
+```
 
 ## Instalasi
 
@@ -18,29 +29,31 @@ Jika PowerShell memblokir `npm.ps1`, gunakan `npm.cmd ci` dan `npm.cmd test`. `n
 
 ## Cara Pakai
 
-Modul baru menyediakan `--help` untuk melihat argumen yang didukung. Brave tidak diperlukan untuk menjalankan modul Siputzx.
+Jalankan contoh berikut dari root repo. Modul baru menyediakan `--help` untuk melihat argumen yang didukung. Brave tidak diperlukan untuk menjalankan modul Siputzx.
 
 ```sh
-node scrape-siputzx-ai-glm47flash.js --help
-node scrape-siputzx-ai-glm47flash.js --prompt "Jelaskan apa itu RSS."
-node scrape-siputzx-info-cuaca.js --q "pasiran jaya"
-node scrape-siputzx-sticker-combot-search.js --q cat --page 1
-node scrape-siputzx-d-github.js --url "https://github.com/sindresorhus/is-png"
-node scrape-siputzx-canvas-blur.js --image "https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png"
+node scrapers/siputzx/ai/scrape-siputzx-ai-glm47flash.js --help
+node scrapers/siputzx/ai/scrape-siputzx-ai-glm47flash.js --prompt "Jelaskan apa itu RSS."
+node scrapers/siputzx/info/scrape-siputzx-info-cuaca.js --q "pasiran jaya"
+node scrapers/siputzx/sticker/scrape-siputzx-sticker-combot-search.js --q cat --page 1
+node scrapers/siputzx/downloader/scrape-siputzx-d-github.js --url "https://github.com/sindresorhus/is-png"
+node scrapers/siputzx/canvas/scrape-siputzx-canvas-blur.js --image "https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png"
 ```
 
 Contoh integrasi di luar Siputzx:
 
 ```sh
-node scrape-equran.js surat 112
-node scrape-frankfurter.js USD IDR 100
-node scrape-anilist.js "One Piece" --type manga --limit 3
+node scrapers/integrations/scrape-equran.js surat 112
+node scrapers/integrations/scrape-frankfurter.js USD IDR 100
+node scrapers/integrations/scrape-anilist.js "One Piece" --type manga --limit 3
 ```
 
-Contoh pemakaian sebagai modul:
+Untuk scraper lama, tambahkan awalan `scrapers/legacy/` ke nama file saat menjalankannya dari root.
+
+Contoh pemakaian sebagai modul dari file JavaScript di root:
 
 ```js
-const { infoCuaca } = require('./scrape-siputzx-info-cuaca');
+const { infoCuaca } = require('./scrapers/siputzx/info/scrape-siputzx-info-cuaca');
 
 async function main() {
   const hasil = await infoCuaca({ q: 'pasiran jaya' });
@@ -60,7 +73,7 @@ Modul Siputzx tidak otomatis mengirim permintaan saat diimpor. CLI mengeluarkan 
 
 ## Cakupan Siputzx
 
-Setiap file `scrape-siputzx-*.js` menangani satu endpoint. URL, parameter, dan contoh penggunaan ada di file masing-masing. [`scraper-utils.js`](scraper-utils.js) menangani permintaan HTTP, validasi, dan CLI, tanpa menyimpan daftar endpoint.
+Setiap file `scrape-siputzx-*.js` menangani satu endpoint. URL, parameter, dan contoh penggunaan ada di file masing-masing. [`scraper-utils.js`](scrapers/lib/scraper-utils.js) menangani permintaan HTTP, validasi, dan CLI, tanpa menyimpan daftar endpoint.
 
 | Kategori | Modul | Kategori | Modul |
 | --- | ---: | --- | ---: |
@@ -84,7 +97,7 @@ Uji offline memakai respons tiruan dan tidak membutuhkan akses internet. Uji liv
 
 ```sh
 npm run test:live
-node --test --test-name-pattern="^Siputzx Tambahan " scrapers.live.test.js
+node --test --test-name-pattern="^Siputzx Tambahan " tests/scrapers.live.test.js
 ```
 
 ## Ketentuan Penggunaan
