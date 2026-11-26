@@ -2,13 +2,14 @@
 
 Koleksi skrip Node.js untuk mencari data publik, membaca katalog, mengambil metadata dan tautan media, serta membuat gambar. Semua file `scrape-*.js` ada di [`scrapers/`](scrapers/). Modul baru dapat dipanggil lewat CLI atau diimpor sebagai fungsi CommonJS.
 
-Per 26 November 2026, koleksi berisi **178 skrip**: 114 modul Siputzx, 18 integrasi lain, dan 46 skrip lama. Modul Siputzx menggunakan endpoint publik yang lolos pengujian tanpa API key atau cookie. Skrip lama memiliki dependensi, format keluaran, dan syarat akses masing-masing.
+Koleksi berisi **184 skrip**: 114 modul Siputzx, 6 modul FreeAPI.pro, 18 integrasi lain, dan 46 skrip lama. Modul Siputzx dan FreeAPI.pro menggunakan endpoint publik yang lolos pengujian tanpa API key atau cookie. Skrip lama memiliki dependensi, format keluaran, dan syarat akses masing-masing.
 
 ## Struktur Folder
 
 ```text
 scrapers/
   siputzx/        # Satu file per endpoint, dipisah menurut kategori
+  freeapi/        # Modul dari dokumentasi publik FreeAPI.pro
   integrations/   # Integrasi lain, seperti EQuran, Frankfurter, dan AniList
   legacy/         # Koleksi scraper lama
   lib/            # Helper HTTP, validasi, dan CLI
@@ -32,12 +33,12 @@ Jika PowerShell memblokir `npm.ps1`, gunakan `npm.cmd ci` dan `npm.cmd test`. `n
 Jalankan contoh berikut dari root repo. Modul baru menyediakan `--help` untuk melihat argumen yang didukung. Brave tidak diperlukan untuk menjalankan modul Siputzx.
 
 ```sh
-node scrapers/siputzx/ai/scrape-siputzx-ai-glm47flash.js --help
-node scrapers/siputzx/ai/scrape-siputzx-ai-glm47flash.js --prompt "Jelaskan apa itu RSS."
-node scrapers/siputzx/info/scrape-siputzx-info-cuaca.js --q "pasiran jaya"
-node scrapers/siputzx/sticker/scrape-siputzx-sticker-combot-search.js --q cat --page 1
-node scrapers/siputzx/downloader/scrape-siputzx-d-github.js --url "https://github.com/sindresorhus/is-png"
-node scrapers/siputzx/canvas/scrape-siputzx-canvas-blur.js --image "https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png"
+node scrapers/siputzx/ai/scrape-glm47flash.js --help
+node scrapers/siputzx/ai/scrape-glm47flash.js --prompt "Jelaskan apa itu RSS."
+node scrapers/siputzx/info/scrape-cuaca.js --q "pasiran jaya"
+node scrapers/siputzx/sticker/scrape-combot-search.js --q cat --page 1
+node scrapers/siputzx/downloader/scrape-github.js --url "https://github.com/sindresorhus/is-png"
+node scrapers/siputzx/canvas/scrape-blur.js --image "https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png"
 ```
 
 Contoh integrasi di luar Siputzx:
@@ -53,7 +54,7 @@ Untuk scraper lama, tambahkan awalan `scrapers/legacy/` ke nama file saat menjal
 Contoh pemakaian sebagai modul dari file JavaScript di root:
 
 ```js
-const { infoCuaca } = require('./scrapers/siputzx/info/scrape-siputzx-info-cuaca');
+const { infoCuaca } = require('./scrapers/siputzx/info/scrape-cuaca');
 
 async function main() {
   const hasil = await infoCuaca({ q: 'pasiran jaya' });
@@ -73,7 +74,7 @@ Modul Siputzx tidak otomatis mengirim permintaan saat diimpor. CLI mengeluarkan 
 
 ## Cakupan Siputzx
 
-Setiap file `scrape-siputzx-*.js` menangani satu endpoint. URL, parameter, dan contoh penggunaan ada di file masing-masing. [`scraper-utils.js`](scrapers/lib/scraper-utils.js) menangani permintaan HTTP, validasi, dan CLI, tanpa menyimpan daftar endpoint.
+Setiap file `scrapers/siputzx/<kategori>/scrape-*.js` menangani satu endpoint. Nama provider dan kategori cukup ditulis di jalur folder, bukan di nama file. URL, parameter, dan contoh penggunaan ada di file masing-masing. [`scraper-utils.js`](scrapers/lib/scraper-utils.js) menangani permintaan HTTP, validasi, dan CLI, tanpa menyimpan daftar endpoint.
 
 | Kategori | Modul | Kategori | Modul |
 | --- | ---: | --- | ---: |
@@ -84,6 +85,19 @@ Setiap file `scrape-siputzx-*.js` menangani satu endpoint. URL, parameter, dan c
 | Primbon | 8 | Info | 3 |
 | Anime (metadata) | 2 | Maker | 1 |
 | Random | 2 | Sticker | 1 |
+
+## FreeAPI.pro
+
+[`scrapers/freeapi/`](scrapers/freeapi/) memuat modul untuk enam endpoint dari [dokumentasi FreeAPI.pro](https://freeapi.pro/docs): `voices` (katalog suara), `tts` (MP3), `hand` (tulisan tangan PNG), `wikipdf` (Wikipedia bahasa Inggris ke PDF), `tti` (tautan gambar AI), dan `search` (katalog MedSter, bukan saran medis).
+
+```sh
+node scrapers/freeapi/scrape-voices.js --language id-ID --limit 5
+node scrapers/freeapi/scrape-tts.js --text "Hello, world!" --voiceIndex 1
+node scrapers/freeapi/scrape-hand.js --text "Hello world" --paper ruled
+node scrapers/freeapi/scrape-wikipdf.js --query "Example.com"
+```
+
+MP3, PNG, dan PDF dikembalikan sebagai `data.base64` beserta `data.mimeType`, tanpa menyimpan file otomatis. Respons biner dibatasi 2 MiB. SpeechSter ditujukan untuk penggunaan nonkomersial; hormati [ketentuan penyedia](https://freeapi.pro/terms) dan lisensi konten Wikipedia.
 
 ## Pengujian
 

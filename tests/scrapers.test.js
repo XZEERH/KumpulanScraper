@@ -20,13 +20,20 @@ const modules = [
   ['scrape-harilibur.js', 'hariLibur'], ['scrape-npm.js', 'npmScraper'],
   ['scrape-hackernews.js', 'hackernews'], ['scrape-openfoodfacts.js', 'openfoodfacts'],
   ['scrape-wayback.js', 'wayback']
-].map(([file, name]) => [`scrapers/integrations/${file}`, name]);
+].map(([file, name]) => [`scrapers/integrations/${file}`, name]).concat([
+  ['scrapers/freeapi/scrape-voices.js', 'freeapiVoices'],
+  ['scrapers/freeapi/scrape-tts.js', 'freeapiTts'],
+  ['scrapers/freeapi/scrape-hand.js', 'freeapiHand'],
+  ['scrapers/freeapi/scrape-wikipdf.js', 'freeapiWikiPdf'],
+  ['scrapers/freeapi/scrape-tti.js', 'freeapiTextToImage'],
+  ['scrapers/freeapi/scrape-medster-search.js', 'freeapiMedicineSearch']
+]);
 const siputzxRoot = 'scrapers/siputzx';
 const categoryFolders = { d: 'downloader', m: 'maker', r: 'random', s: 'search' };
 const siputzxFiles = readdirSync(join(root, siputzxRoot), { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .flatMap(({ name }) => readdirSync(join(root, siputzxRoot, name))
-    .filter((file) => /^scrape-siputzx-.+\.js$/.test(file))
+    .filter((file) => /^scrape-.+\.js$/.test(file))
     .map((file) => `${siputzxRoot}/${name}/${file}`))
   .sort();
 const entryPoints = [...modules, ...siputzxFiles.map((file) => [file])];
@@ -89,9 +96,9 @@ for (const [file, name] of entryPoints) {
     if (!name) {
       const endpoint = help.stdout.match(/^Endpoint: ([^\r\n]+)$/m)?.[1];
       assert.ok(endpoint);
-      const slug = endpoint.replace(/[/_]/g, '-').replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
-      const [group] = endpoint.split('/');
-      assert.equal(file, `${siputzxRoot}/${categoryFolders[group] ?? group}/scrape-siputzx-${slug}.js`);
+      const [group, ...segments] = endpoint.split('/');
+      const slug = segments.join('-').replace(/_/g, '-').replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+      assert.equal(file, `${siputzxRoot}/${categoryFolders[group] ?? group}/scrape-${slug}.js`);
       const code = readFileSync(join(root, file), 'utf8');
       const header = code.match(/\/\*\*([\s\S]*?)\*\//)?.[1];
       assert.ok(header);
@@ -109,6 +116,92 @@ for (const [file, name] of entryPoints) {
     assert.match(JSON.parse(bad.stdout).message, /Opsi tidak dikenal/);
   });
 }
+
+test('FreeAPI voices filters by locale and limits results without sending filter parameters', async (t) => {
+  const voice = { index: 1, id: 'voice-1', name: 'Demo', language: 'Indonesian', edgeVoice: 'id-ID-DemoNeural' };
+  const calls = mockHTTP(t, () => ({ success: true, voices: [
+    voice, { ...voice, index: 2, id: 'voice-2' }, { ...voice, index: 3, id: 'voice-3', language: 'English', edgeVoice: 'en-US-DemoNeural' },
+    { index: -1 }
+  ] }));
+  assert.equal((await api.freeapiVoices({ limit: 0 })).status, false);
+  assert.equal(calls.length, 0);
+  const result = await api.freeapiVoices({ language: 'ID-id', limit: '1' });
+  assert.equal(result.status, true);
+  assert.equal(result.data.total, 2);
+  assert.deepEqual(result.data.voices.map((item) => item.id), ['voice-1']);
+  assert.equal(calls[0].url.href, 'https://freeapi.pro/api/voices');
+});
+
+test('FreeAPI TTS checks voice selection, sends JSON, and rejects mislabeled audio', async (t) => {
+  const mp3 = Buffer.concat([Buffer.from('49443304000000000000fff364c4', 'hex'), Buffer.alloc(140)]);
+  let body = mp3;
+  const calls = mockHTTP(t, () => new Response(body, { headers: { 'Content-Type': 'audio/mpeg' } }));
+  for (const input of [{}, { voice: 'Demo', voiceIndex: 1 }, { voiceIndex: 1, pitch: 101 }]) {
+    assert.equal((await api.freeapiTts({ text: 'Hello', ...input })).status, false);
+  }
+  assert.equal(calls.length, 0);
+  const result = await api.freeapiTts({ text: ' Hello ', voiceIndex: '1', rate: '-10' });
+  assert.deepEqual(result.data, { mimeType: 'audio/mpeg', base64: mp3.toString('base64') });
+  assert.equal(calls[0].url.href, 'https://freeapi.pro/api/tts');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.redirect, 'error');
+  assert.deepEqual(JSON.parse(calls[0].options.body), { voiceIndex: 1, text: 'Hello', pitch: 0, rate: -10 });
+  body = Buffer.from('ID3');
+  assert.equal((await api.freeapiTts({ text: 'Hello', voice: 'Demo' })).status, false);
+});
+
+test('FreeAPI HandSter requests one PNG page and validates input without uploading on invalid options', async (t) => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=', 'base64');
+  const calls = mockHTTP(t, () => new Response(png, { headers: { 'Content-Type': 'image/png' } }));
+  assert.equal((await api.freeapiHand({ text: 'Hello', color: 'url(https://example.test)' })).status, false);
+  assert.equal((await api.freeapiHand({ text: 'Hello', page: 0 })).status, false);
+  assert.equal(calls.length, 0);
+  const result = await api.freeapiHand({ text: 'Hello\nWorld', color: '#0055aa', page: 2 });
+  assert.deepEqual(result.data, { mimeType: 'image/png', base64: png.toString('base64'), page: 2 });
+  assert.equal(calls[0].url.href, 'https://freeapi.pro/api/hand');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    text: 'Hello\nWorld', font: 'neat', color: '#0055aa', size: 34, paper: 'ruled', style: 'neat', page: 2, format: 'png'
+  });
+});
+
+test('FreeAPI WikSter encodes the query and rejects a truncated PDF even with the right MIME', async (t) => {
+  const pdf = Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n');
+  let body = pdf;
+  const calls = mockHTTP(t, () => new Response(body, { headers: { 'Content-Type': 'application/pdf' } }));
+  const result = await api.freeapiWikiPdf({ query: 'Example & Test' });
+  assert.equal(result.data.mimeType, 'application/pdf');
+  assert.equal(result.data.base64, pdf.toString('base64'));
+  assert.match(result.attribution, /Wikipedia/);
+  assert.deepEqual([...calls[0].url.searchParams], [['query', 'Example & Test']]);
+  body = pdf.subarray(0, -6);
+  assert.equal((await api.freeapiWikiPdf({ query: 'Example & Test' })).status, false);
+});
+
+test('FreeAPI PixelSter returns only a provider image link without opening it', async (t) => {
+  let imageUrl = 'https://access.vheer.com/example.jpg';
+  const calls = mockHTTP(t, () => ({ success: true, imageUrl }));
+  assert.equal((await api.freeapiTextToImage({ prompt: 'A flower', ratio: '3:17' })).status, false);
+  assert.equal(calls.length, 0);
+  const result = await api.freeapiTextToImage({ prompt: 'A flower', ratio: '16:9' });
+  assert.deepEqual(result.data, { imageUrl, ratio: '16:9' });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url.href, 'https://freeapi.pro/api/tti');
+  assert.deepEqual(JSON.parse(calls[0].options.body), { prompt: 'A flower', ratio: '16:9' });
+  imageUrl = 'https://access.vheer.com.example.test/example.jpg';
+  assert.equal((await api.freeapiTextToImage({ prompt: 'A flower' })).status, false);
+  assert.equal(calls.length, 2);
+});
+
+test('FreeAPI MedSter exposes catalog metadata but not clinical instructions', async (t) => {
+  const calls = mockHTTP(t, () => ({ success: true, results: [
+    { id: 'example', name: 'Example', price: 'Rs. 42', dosage: 'unused fixture' }, { id: '', name: 'Invalid' }
+  ] }));
+  const result = await api.freeapiMedicineSearch({ q: 'Example & Product' });
+  assert.deepEqual(result.data.results, [{ id: 'example', name: 'Example', price: 'Rs. 42' }]);
+  assert.match(result.data.note, /bukan .*saran medis/);
+  assert.equal(calls[0].url.pathname, '/api/search');
+  assert.deepEqual([...calls[0].url.searchParams], [['q', 'Example & Product']]);
+});
 
 const rss = '<rss version="2.0"><channel><item><title>Test &amp; News</title><link>https://news.google.com/rss/articles/test</link><pubDate>Tue, 24 Nov 2026 12:00:00 GMT</pubDate><source url="https://example.com">Publisher</source></item></channel></rss>';
 const trending = '<article class="Box-row"><h2><a href="/owner/repo">owner / repo</a></h2><p>A test repo</p><span itemprop="programmingLanguage">JavaScript</span><a href="/owner/repo/stargazers">12,000</a><a href="/owner/repo/forks">50</a><span class="float-sm-right">1,200 stars this week</span></article>';
@@ -314,7 +407,7 @@ test('Siputzx uses standalone files and the no-argument CLI fetches only its own
     return Response.json({status:true,data:[{title:'Test article'}]});
   };`);
   const child = spawnSync(process.execPath, [
-    '--import', mock, 'scrapers/siputzx/berita/scrape-siputzx-berita-antara.js'
+    '--import', mock, 'scrapers/siputzx/berita/scrape-antara.js'
   ], childOptions);
   assert.equal(child.status, 0, child.stderr || child.stdout);
   assert.deepEqual(JSON.parse(child.stdout), {
@@ -324,9 +417,9 @@ test('Siputzx uses standalone files and the no-argument CLI fetches only its own
 
 test('Siputzx rejects missing and out-of-range endpoint parameters offline', async (t) => {
   const calls = mockHTTP(t, () => { throw new Error('Request must not happen'); });
-  const { toolsCountryInfo } = require('../scrapers/siputzx/tools/scrape-siputzx-tools-country-info');
-  const { gamesCerdasCermat } = require('../scrapers/siputzx/games/scrape-siputzx-games-cc-sd');
-  const { gamesMaths } = require('../scrapers/siputzx/games/scrape-siputzx-games-maths');
+  const { toolsCountryInfo } = require('../scrapers/siputzx/tools/scrape-country-info');
+  const { gamesCerdasCermat } = require('../scrapers/siputzx/games/scrape-cc-sd');
+  const { gamesMaths } = require('../scrapers/siputzx/games/scrape-maths');
   for (const [scrape, options] of [
     [toolsCountryInfo], [gamesCerdasCermat, { matapelajaran: 'matematika', jumlahsoal: 20 }],
     [gamesMaths, { level: 'invalid' }]
@@ -337,8 +430,8 @@ test('Siputzx rejects missing and out-of-range endpoint parameters offline', asy
 });
 
 test('Siputzx forwards only the documented query fields and preserves HTTP denial', async (t) => {
-  const { toolsTranslate } = require('../scrapers/siputzx/tools/scrape-siputzx-tools-translate');
-  const { infoBmkg } = require('../scrapers/siputzx/info/scrape-siputzx-info-bmkg');
+  const { toolsTranslate } = require('../scrapers/siputzx/tools/scrape-translate');
+  const { infoBmkg } = require('../scrapers/siputzx/info/scrape-bmkg');
   const calls = mockHTTP(t, (url) => url.pathname.endsWith('/tools/translate')
     ? { status: true, data: { translatedText: 'Satu & Dua' }, timestamp: '2026-11-26' }
     : new Response('forbidden', { status: 403 }));
@@ -355,7 +448,7 @@ test('Siputzx forwards only the documented query fields and preserves HTTP denia
 });
 
 test('Siputzx does not cache randomized quiz responses', async (t) => {
-  const { gamesCakLontong } = require('../scrapers/siputzx/games/scrape-siputzx-games-caklontong');
+  const { gamesCakLontong } = require('../scrapers/siputzx/games/scrape-caklontong');
   let number = 0;
   const calls = mockHTTP(t, () => ({ status: true, data: { soal: ++number } }));
   assert.equal((await gamesCakLontong()).data.soal, 1);
@@ -364,7 +457,7 @@ test('Siputzx does not cache randomized quiz responses', async (t) => {
 });
 
 test('Siputzx QwQ accepts fractional temperature, skips caching, and rejects empty answers', async (t) => {
-  const { aiQwq32b } = require('../scrapers/siputzx/ai/scrape-siputzx-ai-qwq32b');
+  const { aiQwq32b } = require('../scrapers/siputzx/ai/scrape-qwq32b');
   let answer = 'Halo!';
   const calls = mockHTTP(t, () => ({ status: true, data: { response: answer } }));
   for (const temperature of [-0.1, 2.1, ' ', false]) {
@@ -384,9 +477,9 @@ test('Siputzx QwQ accepts fractional temperature, skips caching, and rejects emp
 });
 
 test('Siputzx preserves text and structured AI replies and canonical translation codes', async (t) => {
-  const { aiGita } = require('../scrapers/siputzx/ai/scrape-siputzx-ai-gita');
-  const { aiBibleAI } = require('../scrapers/siputzx/ai/scrape-siputzx-ai-bibleai');
-  const { aiMetaAI } = require('../scrapers/siputzx/ai/scrape-siputzx-ai-metaai');
+  const { aiGita } = require('../scrapers/siputzx/ai/scrape-gita');
+  const { aiBibleAI } = require('../scrapers/siputzx/ai/scrape-bibleai');
+  const { aiMetaAI } = require('../scrapers/siputzx/ai/scrape-metaai');
   const bible = { results: { answer: 'A test answer', sources: ['Test reference'] } };
   const calls = mockHTTP(t, (url) => ({ status: true, data: url.pathname.endsWith('/bibleai') ? bible : 'A text reply' }));
   assert.equal((await aiGita({ q: 'What is the Bhagavad Gita?' })).data, 'A text reply');
@@ -397,7 +490,7 @@ test('Siputzx preserves text and structured AI replies and canonical translation
 });
 
 test('Siputzx Brat returns verified PNG/GIF bytes as Base64 and rejects a mismatched body', async (t) => {
-  const { makeBrat } = require('../scrapers/siputzx/maker/scrape-siputzx-m-brat');
+  const { makeBrat } = require('../scrapers/siputzx/maker/scrape-brat');
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=', 'base64');
   const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
   const calls = mockHTTP(t, (url) => {
@@ -439,8 +532,8 @@ test('image endpoints accept public image sources and verify the returned format
 });
 
 test('Siputzx image modules reject unapproved screenshot destinations and sanitize leaderboard input', async (t) => {
-  const { toolsScreenshot } = require('../scrapers/siputzx/tools/scrape-siputzx-tools-ssweb');
-  const { canvasTop } = require('../scrapers/siputzx/canvas/scrape-siputzx-canvas-top');
+  const { toolsScreenshot } = require('../scrapers/siputzx/tools/scrape-ssweb');
+  const { canvasTop } = require('../scrapers/siputzx/canvas/scrape-top');
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=', 'base64');
   const calls = mockHTTP(t, () => new Response(png, { headers: { 'Content-Type': 'image/png' } }));
   for (const url of ['https://localhost', 'https://example.com.example.test/', 'https://example.com/not-a-demo']) {
@@ -456,7 +549,7 @@ test('Siputzx image modules reject unapproved screenshot destinations and saniti
 });
 
 test('Siputzx public-profile module drops private profiles and excludes upstream account identifiers', async (t) => {
-  const { stalkTikTok } = require('../scrapers/siputzx/stalk/scrape-siputzx-stalk-tiktok');
+  const { stalkTikTok } = require('../scrapers/siputzx/stalk/scrape-tiktok');
   const data = {
     found: true, handle: 'example', url: 'https://www.tiktok.com/@example',
     user: { privateAccount: false, nickname: 'Demo', verified: false, secUid: 'fixture', email: 'example@example.test' },
@@ -476,10 +569,10 @@ test('Siputzx public-profile module drops private profiles and excludes upstream
 });
 
 test('Siputzx downloaders reject invalid or unsupported public URLs before making a request', async (t) => {
-  const { downloadGithub } = require('../scrapers/siputzx/downloader/scrape-siputzx-d-github');
-  const { downloadFastDL } = require('../scrapers/siputzx/downloader/scrape-siputzx-d-fastdl');
-  const { downloadTikTok } = require('../scrapers/siputzx/downloader/scrape-siputzx-d-tiktok');
-  const { download9xBuddy } = require('../scrapers/siputzx/downloader/scrape-siputzx-d-9xbuddy');
+  const { downloadGithub } = require('../scrapers/siputzx/downloader/scrape-github');
+  const { downloadFastDL } = require('../scrapers/siputzx/downloader/scrape-fastdl');
+  const { downloadTikTok } = require('../scrapers/siputzx/downloader/scrape-tiktok');
+  const { download9xBuddy } = require('../scrapers/siputzx/downloader/scrape-9xbuddy');
   const calls = mockHTTP(t, () => assert.fail('Request must not happen'));
   for (const url of [undefined, 'http://github.com/owner/repo', 'https://github.com.example.test/owner/repo',
     'https://user@github.com/owner/repo', 'https://github.com:8443/owner/repo', 'https://github.com/owner/repo/issues']) {
@@ -493,7 +586,7 @@ test('Siputzx downloaders reject invalid or unsupported public URLs before makin
 });
 
 test('Siputzx GitHub returns only after finding an archive link and never fetches that link itself', async (t) => {
-  const { downloadGithub } = require('../scrapers/siputzx/downloader/scrape-siputzx-d-github');
+  const { downloadGithub } = require('../scrapers/siputzx/downloader/scrape-github');
   const downloadUrl = 'https://github.com/owner/repo/archive/refs/heads/main.zip';
   let data = { owner: 'owner', repo: 'repo', download_url: downloadUrl };
   const calls = mockHTTP(t, () => ({ status: true, data }));
@@ -510,7 +603,7 @@ test('Siputzx GitHub returns only after finding an archive link and never fetche
 });
 
 test('Siputzx 9xbuddy keeps the video ID and returns only valid direct video formats', async (t) => {
-  const { download9xBuddy } = require('../scrapers/siputzx/downloader/scrape-siputzx-d-9xbuddy');
+  const { download9xBuddy } = require('../scrapers/siputzx/downloader/scrape-9xbuddy');
   const url = 'https://video-test.googlevideo.com/videoplayback?signature=sample';
   const calls = mockHTTP(t, () => ({ status: true, data: {
     ok: true, title: 'Test Video', duration: '5s', formats: [
@@ -528,7 +621,7 @@ test('Siputzx 9xbuddy keeps the video ID and returns only valid direct video for
 });
 
 test('Siputzx Lahelu projects only public post metadata instead of forwarding the raw payload', async (t) => {
-  const { downloadLahelu } = require('../scrapers/siputzx/downloader/scrape-siputzx-d-lahelu');
+  const { downloadLahelu } = require('../scrapers/siputzx/downloader/scrape-lahelu');
   const media = 'https://cache.lahelu.com/example.webp';
   const calls = mockHTTP(t, (url) => ({ status: true, data: {
     status: true, sensitive: url.searchParams.get('url').endsWith('/PTest2'), post_id: 'PTest1', title: 'Cat',

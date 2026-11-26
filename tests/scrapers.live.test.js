@@ -31,49 +31,62 @@ const checks = [
   ['Hacker News', () => require('../scrapers/integrations/scrape-hackernews').hackernews('top', options)],
   ['Open Food Facts staging', () => require('../scrapers/integrations/scrape-openfoodfacts').openfoodfacts('3274080005003', { ...options, staging: true })],
   ['Wayback', () => require('../scrapers/integrations/scrape-wayback').wayback('https://example.com', options)],
-  ['Siputzx Antara', () => require('../scrapers/siputzx/berita/scrape-siputzx-berita-antara').beritaAntara(options),
+  ['Siputzx Antara', () => require('../scrapers/siputzx/berita/scrape-antara').beritaAntara(options),
     (result) => assert.ok(result.data[0]?.title)],
-  ['Siputzx BMKG', () => require('../scrapers/siputzx/info/scrape-siputzx-info-bmkg').infoBmkg(options),
+  ['Siputzx BMKG', () => require('../scrapers/siputzx/info/scrape-bmkg').infoBmkg(options),
     (result) => assert.ok(result.data.auto)],
-  ['Siputzx tebak logo', () => require('../scrapers/siputzx/games/scrape-siputzx-games-tebaklogo').gamesTebakLogo(options),
+  ['Siputzx tebak logo', () => require('../scrapers/siputzx/games/scrape-tebaklogo').gamesTebakLogo(options),
     (result) => assert.ok(Object.keys(result.data.data ?? {}).length > 0)],
-  ['Siputzx maths', () => require('../scrapers/siputzx/games/scrape-siputzx-games-maths').gamesMaths({ ...options, level: 'easy' }),
+  ['Siputzx maths', () => require('../scrapers/siputzx/games/scrape-maths').gamesMaths({ ...options, level: 'easy' }),
     (result) => assert.ok(result.data.str)],
-  ['Siputzx AI QwQ', () => require('../scrapers/siputzx/ai/scrape-siputzx-ai-qwq32b').aiQwq32b({
+  ['Siputzx AI QwQ', () => require('../scrapers/siputzx/ai/scrape-qwq32b').aiQwq32b({
     prompt: 'Halo, siapa kamu?', system: 'You are a helpful assistant.', temperature: 0.7
   }), (result) => assert.ok(result.data.response.trim())],
-  ['Siputzx AI GPT OSS', () => require('../scrapers/siputzx/ai/scrape-siputzx-ai-gptoss120b').aiGptOss120b(chat),
+  ['Siputzx AI GPT OSS', () => require('../scrapers/siputzx/ai/scrape-gptoss120b').aiGptOss120b(chat),
     (result) => assert.ok(result.data.response.trim())],
-  ['Siputzx AI GLM', () => require('../scrapers/siputzx/ai/scrape-siputzx-ai-glm47flash').aiGlm47Flash(chat),
+  ['Siputzx AI GLM', () => require('../scrapers/siputzx/ai/scrape-glm47flash').aiGlm47Flash(chat),
     (result) => assert.ok(result.data.response.trim())],
-  ['Siputzx AI DeepSeek', () => require('../scrapers/siputzx/ai/scrape-siputzx-ai-deepseekr1').aiDeepSeekR1({
+  ['Siputzx AI DeepSeek', () => require('../scrapers/siputzx/ai/scrape-deepseekr1').aiDeepSeekR1({
     ...chat, prompt: 'Berapa 2 + 2? Jawab dengan satu angka saja.'
   }), (result) => assert.ok(result.data.response.trim())],
-  ['Siputzx AI Gita', () => require('../scrapers/siputzx/ai/scrape-siputzx-ai-gita').aiGita({ q: 'What is the Bhagavad Gita?' }),
+  ['Siputzx AI Gita', () => require('../scrapers/siputzx/ai/scrape-gita').aiGita({ q: 'What is the Bhagavad Gita?' }),
     (result) => assert.ok(result.data.trim())],
-  ['Siputzx AI Bible', () => require('../scrapers/siputzx/ai/scrape-siputzx-ai-bibleai').aiBibleAI({
+  ['Siputzx AI Bible', () => require('../scrapers/siputzx/ai/scrape-bibleai').aiBibleAI({
     question: 'Where is the parable of the mustard seed?', translation: 'ESV'
   }), (result) => assert.ok(result.data.results.answer.trim())],
-  ['Siputzx AI Meta', () => require('../scrapers/siputzx/ai/scrape-siputzx-ai-metaai').aiMetaAI({ query: 'Berapa 2 + 2? Jawab dengan satu angka saja.' }),
+  ['Siputzx AI Meta', () => require('../scrapers/siputzx/ai/scrape-metaai').aiMetaAI({ query: 'Berapa 2 + 2? Jawab dengan satu angka saja.' }),
     (result) => assert.ok(result.data.trim())],
-  ['Siputzx Brat PNG', () => require('../scrapers/siputzx/maker/scrape-siputzx-m-brat').makeBrat({ text: 'Halo' }),
+  ['Siputzx Brat PNG', () => require('../scrapers/siputzx/maker/scrape-brat').makeBrat({ text: 'Halo' }),
     (result) => assert.equal(result.data.mimeType, 'image/png')],
-  ['Siputzx Brat GIF', () => require('../scrapers/siputzx/maker/scrape-siputzx-m-brat').makeBrat({ text: 'Halo dunia', isAnimated: true, delay: 500 }),
+  ['Siputzx Brat GIF', () => require('../scrapers/siputzx/maker/scrape-brat').makeBrat({ text: 'Halo dunia', isAnimated: true, delay: 500 }),
     (result) => assert.equal(result.data.mimeType, 'image/gif')],
-  ['Siputzx Downloader GitHub', () => require('../scrapers/siputzx/downloader/scrape-siputzx-d-github').downloadGithub({ url: 'https://github.com/sindresorhus/is-png' }),
+  ['Siputzx Downloader GitHub', () => require('../scrapers/siputzx/downloader/scrape-github').downloadGithub({ url: 'https://github.com/sindresorhus/is-png' }),
     (result) => assert.equal(result.data.repo, 'is-png')],
-  ['Siputzx Downloader FastDL', () => require('../scrapers/siputzx/downloader/scrape-siputzx-d-fastdl').downloadFastDL({ url: instagram })],
-  ['Siputzx Downloader SSSInstagram', () => require('../scrapers/siputzx/downloader/scrape-siputzx-d-sssinstagram').downloadSSSInstagram({ url: instagram })],
-  ['Siputzx Downloader iGram', () => require('../scrapers/siputzx/downloader/scrape-siputzx-d-igram').downloadIGram({ url: instagram })],
-  ['Siputzx Downloader Ummy', () => require('../scrapers/siputzx/downloader/scrape-siputzx-d-ummy').downloadUmmy({ url: instagram })],
-  ['Siputzx Downloader TikTok', () => require('../scrapers/siputzx/downloader/scrape-siputzx-d-tiktok').downloadTikTok({ url: tiktok })],
-  ['Siputzx Downloader TikTok V2', () => require('../scrapers/siputzx/downloader/scrape-siputzx-d-tiktok-v2').downloadTikTokV2({ url: tiktok })],
-  ['Siputzx Downloader Douyin', () => require('../scrapers/siputzx/downloader/scrape-siputzx-d-douyin').downloadDouyin({ url: tiktok })],
-  ['Siputzx Downloader 9xbuddy', () => require('../scrapers/siputzx/downloader/scrape-siputzx-d-9xbuddy').download9xBuddy({
+  ['Siputzx Downloader FastDL', () => require('../scrapers/siputzx/downloader/scrape-fastdl').downloadFastDL({ url: instagram })],
+  ['Siputzx Downloader SSSInstagram', () => require('../scrapers/siputzx/downloader/scrape-sssinstagram').downloadSSSInstagram({ url: instagram })],
+  ['Siputzx Downloader iGram', () => require('../scrapers/siputzx/downloader/scrape-igram').downloadIGram({ url: instagram })],
+  ['Siputzx Downloader Ummy', () => require('../scrapers/siputzx/downloader/scrape-ummy').downloadUmmy({ url: instagram })],
+  ['Siputzx Downloader TikTok', () => require('../scrapers/siputzx/downloader/scrape-tiktok').downloadTikTok({ url: tiktok })],
+  ['Siputzx Downloader TikTok V2', () => require('../scrapers/siputzx/downloader/scrape-tiktok-v2').downloadTikTokV2({ url: tiktok })],
+  ['Siputzx Downloader Douyin', () => require('../scrapers/siputzx/downloader/scrape-douyin').downloadDouyin({ url: tiktok })],
+  ['Siputzx Downloader 9xbuddy', () => require('../scrapers/siputzx/downloader/scrape-9xbuddy').download9xBuddy({
     url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ' // Big Buck Bunny, Blender Foundation, CC BY.
   }), (result) => assert.match(result.data.title, /Big Buck Bunny/i)],
-  ['Siputzx Downloader Lahelu', () => require('../scrapers/siputzx/downloader/scrape-siputzx-d-lahelu').downloadLahelu({ url: 'https://lahelu.com/post/PhuP6LKpL' }),
-    (result) => assert.equal(result.data.postId, 'PhuP6LKpL')]
+  ['Siputzx Downloader Lahelu', () => require('../scrapers/siputzx/downloader/scrape-lahelu').downloadLahelu({ url: 'https://lahelu.com/post/PhuP6LKpL' }),
+    (result) => assert.equal(result.data.postId, 'PhuP6LKpL')],
+  ['FreeAPI voices', () => require('../scrapers/freeapi/scrape-voices').freeapiVoices({ language: 'id-ID', limit: 2, cache: false }),
+    (result) => assert.match(result.data.voices[0]?.edgeVoice, /^id-ID-/)],
+  ['FreeAPI TTS MP3', () => require('../scrapers/freeapi/scrape-tts').freeapiTts({ text: 'Hello from Kumpulan Scraper.', voiceIndex: 1 }),
+    (result) => assert.equal(result.data.mimeType, 'audio/mpeg')],
+  ['FreeAPI HandSter PNG', () => require('../scrapers/freeapi/scrape-hand').freeapiHand({ text: 'Hello from Kumpulan Scraper' }),
+    (result) => assert.equal(result.data.mimeType, 'image/png')],
+  ['FreeAPI WikSter PDF', () => require('../scrapers/freeapi/scrape-wikipdf').freeapiWikiPdf({ query: 'Example.com' }),
+    (result) => assert.equal(result.data.mimeType, 'application/pdf')],
+  ['FreeAPI PixelSter', () => require('../scrapers/freeapi/scrape-tti').freeapiTextToImage({
+    prompt: 'A flat icon of a yellow flower on a white background', timeout: 50000
+  }), (result) => assert.equal(new URL(result.data.imageUrl).hostname, 'access.vheer.com')],
+  ['FreeAPI MedSter search', () => require('../scrapers/freeapi/scrape-medster-search').freeapiMedicineSearch({ q: 'panadol', cache: false }),
+    (result) => assert.match(result.data.results[0]?.name, /panadol/i)]
 ];
 
 const demoImage = 'https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png';
@@ -119,9 +132,9 @@ const siputzxAdditions = {
 const categoryFolders = { d: 'downloader', m: 'maker', r: 'random', s: 'search' };
 for (const [route, input] of Object.entries(siputzxAdditions)) {
   checks.push([`Siputzx Tambahan ${route}`, () => {
-    const [group] = route.split('/');
-    const slug = route.replace(/[/_]/g, '-').replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
-    const [scrape] = Object.values(require(`../scrapers/siputzx/${categoryFolders[group] ?? group}/scrape-siputzx-${slug}`));
+    const [group, ...segments] = route.split('/');
+    const slug = segments.join('-').replace(/_/g, '-').replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+    const [scrape] = Object.values(require(`../scrapers/siputzx/${categoryFolders[group] ?? group}/scrape-${slug}`));
     return scrape({ ...input, cache: false });
   }, (result) => {
     assert.equal(result.endpoint, route);

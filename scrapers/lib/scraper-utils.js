@@ -306,4 +306,4 @@ function imageEndpoint(url, options) {
   return endpointModule(url, { ...options, image: true });
 }
 
-module.exports = { request, text, hasText, integer, choice, isoDate, urlWithParams, httpsUrl, publicImageUrl, failure, runCLI, jsonEndpoint, imageEndpoint };
+module.exports = { request, text, hasText, integer, choice, isoDate, urlWithParams, httpsUrl, publicImageUrl, imageData, failure, runCLI, jsonEndpoint, imageEndpoint };
