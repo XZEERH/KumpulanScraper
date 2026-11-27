@@ -1,6 +1,6 @@
 # KumpulanScraper
 
-Kumpulan **949 skrip Node.js** untuk mencari data publik, menjelajahi katalog, mengambil tautan media, dan membuat konten. Lihat daftar file di [`scrapers/`](scrapers/).
+Kumpulan **1.000 skrip Node.js** untuk mencari data publik, menjelajahi katalog, mengambil tautan media, dan membuat konten. Lihat daftar file di [`scrapers/`](scrapers/).
 
 ## Kategori
 
@@ -9,15 +9,15 @@ Jumlah berikut menggabungkan semua penyedia. Setiap file `scrape-*.js` dihitung 
 | Kategori | Skrip | Contoh fitur |
 | --- | ---: | --- |
 | AI & suara | 146 | Chat AI, transkripsi, text-to-speech |
-| Hiburan & gim | 141 | Anime, manga, kuis, lirik, jadwal TV |
-| Pencarian & katalog | 123 | Artikel, buku, aplikasi, profil publik |
+| Hiburan & gim | 145 | Anime, manga, kuis, referensi gim, jadwal TV |
+| Pencarian & katalog | 137 | Artikel, buku, dataset, paket, profil publik |
 | Gambar & desain | 122 | Canvas, stiker, poster, ilustrasi |
-| Berita & data publik | 108 | Berita, cuaca, gempa, kurs, wilayah Indonesia |
-| Utilitas | 107 | Konversi format, QR, PDF, arsip web |
+| Utilitas | 121 | Konversi format, QR, zona waktu, versi perangkat lunak |
+| Berita & data publik | 119 | Berita, cuaca, gelombang laut, gempa, wilayah Indonesia |
 | Media & unduhan | 103 | Metadata dan tautan audio, video, atau file |
-| Islami & budaya | 52 | Al-Qur'an, hadis, jadwal salat, aksara Jawa |
+| Islami & budaya | 60 | Al-Qur'an, jadwal salat, aksara Jawa, museum, sastra |
 | [Skrip lama](scrapers/legacy/) | 47 | Beragam fitur; sebagian perlu dependensi tambahan |
-| **Total** | **949** | |
+| **Total** | **1.000** | |
 
 ## Cara Pakai
 
@@ -29,6 +29,7 @@ node scrapers/wilayah/scrape-kecamatan.js --help
 node scrapers/wilayah/scrape-kecamatan.js --kode 31.71
 node scrapers/nexray/search/scrape-wikipedia.js --q Indonesia
 node scrapers/ikhlas/info/scrape-bmkg.js
+node scrapers/public-data/data/scrape-elevasi-medan.js --latitude -6.2088 --longitude 106.8456
 ```
 
 Modul yang mendukung CommonJS juga bisa diimpor dari file JavaScript di root proyek:
@@ -53,5 +54,6 @@ node --env-file=.env scrapers/kyio/search/scrape-wikipedia.js --q Indonesia
 
 Gunakan data publik dan unduh hanya konten yang diizinkan. Hormati batas akses dan ketentuan penyedia.
 Jangan menjual ulang akses Ikhlas API tanpa izin tertulis, sesuai [ketentuan penyedia](https://ikhlasapi.web.id/terms-of-service).
+API publik [Open-Meteo](https://open-meteo.com/) diperuntukkan bagi penggunaan nonkomersial. Cantumkan atribusi Open-Meteo dan [Sunrise-Sunset](https://sunrise-sunset.org/) jika menampilkan hasil dari masing-masing penyedia.
 
 [Lisensi MIT](LICENSE) berlaku untuk kontribusi asli proyek. Kode dan konten pihak ketiga mengikuti lisensinya masing-masing; kredit pembuat, termasuk **Razeerh**, tercantum di header skrip.

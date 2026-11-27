@@ -57,7 +57,7 @@ const nexrayFiles = readdirSync(join(root, 'scrapers/nexray'), { withFileTypes: 
   .filter((entry) => entry.isFile() && /^scrape-.+\.js$/.test(entry.name))
   .map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/')).sort();
 const documentedFiles = readdirSync(join(root, 'scrapers'), { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && ['ikhlas', 'azbry', 'prexzy'].includes(entry.name))
+  .filter((entry) => entry.isDirectory() && ['ikhlas', 'azbry', 'prexzy', 'public-data'].includes(entry.name))
   .flatMap((entry) => readdirSync(join(root, 'scrapers', entry.name), { withFileTypes: true, recursive: true }))
   .filter((entry) => entry.isFile() && /^scrape-.+\.js$/.test(entry.name))
   .map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/')).sort();
@@ -258,6 +258,29 @@ test('Documented API accepts raw JSON, validated images, and plain text', async 
   assert.deepEqual((await image.scrape()).data, { mimeType: 'image/png', base64: png.toString('base64') });
   assert.equal((await style.scrape()).data, 'Hello world');
   assert.equal(calls.length, 3);
+});
+
+test('Public data validates GitHub repository parameters before requesting a release', async (t) => {
+  const { githubLatestRelease } = require('../scrapers/public-data/tools/scrape-github-latest-release');
+  const release = { tag_name: 'v1.2.3', draft: false };
+  const calls = mockHTTP(t, () => release);
+  assert.equal((await githubLatestRelease({ owner: '..', repo: 'cli' })).status, false);
+  assert.equal(calls.length, 0);
+  const result = await githubLatestRelease({ owner: 'cli', repo: 'cli', ignored: 'not sent' });
+  assert.deepEqual(result.data, release);
+  assert.equal(calls[0].url.href, 'https://api.github.com/repos/cli/cli/releases/latest');
+  assert.equal(calls[0].options.redirect, 'error');
+});
+
+test('Public data preserves declared NuGet query options and rejects an unexpected response', async (t) => {
+  const { nugetSearch } = require('../scrapers/public-data/search/scrape-nuget-search');
+  const data = { data: [{ id: 'Newtonsoft.Json' }] };
+  const calls = mockHTTP(t, (url) => url.searchParams.get('q') === 'bad payload' ? { status: false } : data);
+  assert.equal((await nugetSearch({ q: 'Newtonsoft.Json', take: 26 })).status, false);
+  assert.equal(calls.length, 0);
+  assert.deepEqual((await nugetSearch({ q: 'Newtonsoft.Json' })).data, data);
+  assert.deepEqual([...calls[0].url.searchParams], [['prerelease', 'false'], ['q', 'Newtonsoft.Json'], ['take', '5']]);
+  assert.equal((await nugetSearch({ q: 'bad payload' })).status, false);
 });
 
 test('ApiKu files use distinct endpoints and keep the provider name in the folder', () => {
