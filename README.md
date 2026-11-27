@@ -1,4 +1,4 @@
-# KumpulanScraperv2
+# KumpulanScraper
 
 Kumpulan **673 skrip Node.js** untuk mencari data publik, menjelajahi katalog, mengambil tautan media, dan membuat konten. Lihat daftar file di [`scrapers/`](scrapers/).
 
