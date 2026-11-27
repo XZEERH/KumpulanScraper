@@ -4,6 +4,7 @@ const { relative, sep } = require('node:path');
 const { setTimeout: sleep } = require('node:timers/promises');
 
 const USER_AGENT = 'KumpulanScraperv2/1.0 (+https://github.com/Lmavour/KumpulanScraperv2)';
+const MIB = 1024 * 1024;
 const cache = new Map();
 const nextRequest = new Map();
 const cooldown = new Map();
@@ -101,11 +102,14 @@ function checkCooldown(origin) {
 async function request(url, options = {}) {
   const timeout = integer(options.timeout, 25000, 1, 120000, 'Timeout');
   const interval = options.interval ?? 250;
+  const maxBytes = integer(options.maxBytes, 2 * MIB, 1, 64 * MIB, 'Batas ukuran respons');
   const format = options.format || 'json';
   const binary = format === 'binary';
-  const ttl = binary || options.cache === false ? 0 : (options.cacheTtl ?? 60000);
-  const jsonBody = options.jsonBody === undefined ? undefined : JSON.stringify(options.jsonBody);
-  const key = ttl > 0 ? JSON.stringify([format, url, jsonBody]) : null;
+  const { formData } = options;
+  const ttl = binary || formData || options.cache === false ? 0 : (options.cacheTtl ?? 60000);
+  const jsonBody = formData || options.jsonBody === undefined ? undefined : JSON.stringify(options.jsonBody);
+  const requestBody = formData ?? jsonBody;
+  const key = ttl > 0 ? JSON.stringify([format, url, jsonBody, maxBytes]) : null;
   const saved = key === null ? undefined : cache.get(key);
   if (saved && saved.expires > Date.now()) return format === 'json' ? JSON.parse(saved.body) : saved.body;
 
@@ -133,8 +137,8 @@ async function request(url, options = {}) {
     if (contact && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) headers.email = contact;
     const response = await fetch(url, {
       headers, signal: controller.signal,
-      redirect: options.redirect ?? (jsonBody === undefined ? 'follow' : 'error'),
-      ...(jsonBody === undefined ? {} : { method: 'POST', body: jsonBody })
+      redirect: options.redirect ?? (requestBody === undefined ? 'follow' : 'error'),
+      ...(requestBody === undefined ? {} : { method: 'POST', body: requestBody })
     });
     if (!response.ok && !(options.allowNotFound === true && response.status === 404)) {
       const error = new Error(`HTTP ${response.status} dari ${origin}`);
@@ -158,9 +162,10 @@ async function request(url, options = {}) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 2 * 1024 * 1024) {
+      if (size > maxBytes) {
         await reader.cancel();
-        throw new Error('Respons melebihi batas 2 MB');
+        const limit = maxBytes % MIB === 0 ? `${maxBytes / MIB} MB` : `${maxBytes} byte`;
+        throw new Error(`Respons melebihi batas ${limit}`);
       }
       chunks.push(Buffer.from(value));
     }

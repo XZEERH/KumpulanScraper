@@ -179,6 +179,30 @@ for (const [route, input, verify] of apiku) {
   }, (result) => verify(result.data)]);
 }
 
+checks.push(
+  ['API publik Wilayah.id provinsi', () => require('../scrapers/wilayah/scrape-provinsi').daftarProvinsi(options),
+    (result) => assert.ok(result.data.regions.some(({ code }) => code === '31'))],
+  ['API publik Wilayah.id kabupaten', () => require('../scrapers/wilayah/scrape-kabupaten').daftarKabupaten({ ...options, kode: '31' }),
+    (result) => assert.ok(result.data.regions.some(({ code }) => code === '31.71'))],
+  ['API publik Wilayah.id kecamatan', () => require('../scrapers/wilayah/scrape-kecamatan').daftarKecamatan({ ...options, kode: '31.71' }),
+    (result) => assert.ok(result.data.regions.some(({ code }) => code === '31.71.03'))],
+  ['API publik Wilayah.id desa', () => require('../scrapers/wilayah/scrape-desa').daftarDesa({ ...options, kode: '31.71.03' }),
+    (result) => assert.ok(result.data.regions.some(({ code, name }) => code === '31.71.03.1001' && name === 'Kemayoran'))],
+  ['API publik USGS', () => require('../scrapers/integrations/scrape-gempa-global').gempaGlobal(options),
+    (result) => assert.ok(result.data.events[0]?.magnitude >= 4.5)],
+  ['API publik World Bank', () => require('../scrapers/integrations/scrape-statistik-negara').statistikNegara({
+    ...options, country: 'IDN', indicator: 'SP.POP.TOTL', from: 2020, to: 2024, limit: 5
+  }), (result) => assert.ok(result.data.results.some(({ year, value }) => year === 2024 && value > 0))],
+  ['API publik Open-Meteo Geocoding', () => require('../scrapers/integrations/scrape-geocoding').geocoding({
+    ...options, name: 'Bandung', country: 'ID', limit: 3
+  }), (result) => assert.ok(result.data.results.some(({ countryCode, timezone }) => countryCode === 'ID' && timezone === 'Asia/Jakarta'))],
+  ['API publik NASA Image Library', () => require('../scrapers/integrations/scrape-foto-angkasa').fotoAngkasa({
+    ...options, q: 'Apollo 11', limit: 2
+  }), (result) => assert.ok(result.data.results.some(({ preview }) => preview?.startsWith('https://images-assets.nasa.gov/')))],
+  ['API publik Spaceflight News', () => require('../scrapers/integrations/scrape-berita-angkasa').beritaAngkasa({ ...options, q: 'NASA', limit: 2 }),
+    (result) => assert.ok(result.data.results.some(({ title, url }) => title && url.startsWith('https://')))]
+);
+
 const demoImage = 'https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png';
 const demoBackground = 'https://placehold.co/400x300.png';
 const demoAvatar = { username: 'Demo', avatar: demoImage };

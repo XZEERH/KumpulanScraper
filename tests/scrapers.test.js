@@ -19,8 +19,11 @@ const modules = [
   ['scrape-mangadex.js', 'mangadex'], ['scrape-githubtrending.js', 'githubTrending'],
   ['scrape-harilibur.js', 'hariLibur'], ['scrape-npm.js', 'npmScraper'],
   ['scrape-hackernews.js', 'hackernews'], ['scrape-openfoodfacts.js', 'openfoodfacts'],
-  ['scrape-wayback.js', 'wayback']
+  ['scrape-wayback.js', 'wayback'], ['scrape-gempa-global.js', 'gempaGlobal'], ['scrape-statistik-negara.js', 'statistikNegara'],
+  ['scrape-geocoding.js', 'geocoding'], ['scrape-foto-angkasa.js', 'fotoAngkasa'], ['scrape-berita-angkasa.js', 'beritaAngkasa']
 ].map(([file, name]) => [`scrapers/integrations/${file}`, name]).concat([
+  ['scrapers/wilayah/scrape-provinsi.js', 'daftarProvinsi'], ['scrapers/wilayah/scrape-kabupaten.js', 'daftarKabupaten'],
+  ['scrapers/wilayah/scrape-kecamatan.js', 'daftarKecamatan'], ['scrapers/wilayah/scrape-desa.js', 'daftarDesa'],
   ['scrapers/freeapi/scrape-voices.js', 'freeapiVoices'],
   ['scrapers/freeapi/scrape-tts.js', 'freeapiTts'],
   ['scrapers/freeapi/scrape-hand.js', 'freeapiHand'],
@@ -340,6 +343,108 @@ test('Kangwifi rejects unknown providers and invalid path, limit, and query inpu
     ['wikipedia', { q: 'Example', lang: 'example.org' }], ['pokemon', { name: '../item/1' }],
     ['dogImages', { breed: '../test' }], ['appstore', { query: 'Example', limit: 21 }],
     ['arxiv', { q: '" OR ti:*' }], ['bmkgCuaca', { adm4: '31.71' }], ['qrCode', { text: 'Demo', size: 900 }]
+  ]) assert.equal((await api[name](input)).status, false);
+  assert.equal(calls.length, 0);
+});
+
+for (const [name, path, level, kode, code] of [
+  ['daftarProvinsi', 'provinces.json', 1, undefined, '31'],
+  ['daftarKabupaten', 'regencies/31.json', 2, '31', '31.71'],
+  ['daftarKecamatan', 'districts/31.71.json', 3, '31.71', '31.71.03'],
+  ['daftarDesa', 'villages/31.71.03.json', 4, '31.71.03', '31.71.03.1001']
+]) {
+  test(`Public API ${name}: reads the expected administrative level`, async (t) => {
+    const regions = [{ code, name: 'Contoh' }];
+    const calls = mockHTTP(t, () => ({ data: regions, meta: { administrative_area_level: level, updated_at: '2025-07-04' } }));
+    const result = await api[name]({ kode, cache: false });
+    assert.equal(result.status, true, result.message);
+    assert.deepEqual(result.data, { regions, updatedAt: '2025-07-04' });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url.href, `https://wilayah.id/api/${path}`);
+  });
+}
+
+test('Public API Wilayah.id rejects records from a different parent region', async (t) => {
+  mockHTTP(t, () => ({ data: [{ code: '31.71.02.1001', name: 'Other district' }], meta: { administrative_area_level: 4 } }));
+  assert.equal((await api.daftarDesa({ kode: '31.71.03', cache: false })).status, false);
+});
+
+test('Public API USGS reads longitude, latitude, and depth in GeoJSON order', async (t) => {
+  const point = {
+    id: 'event', properties: { type: 'earthquake', mag: 5, time: 1795730237000, url: 'https://earthquake.usgs.gov/earthquakes/eventpage/event' },
+    geometry: { type: 'Point', coordinates: [107.5, -6.9, 21] }
+  };
+  const calls = mockHTTP(t, () => ({ type: 'FeatureCollection', features: [{ ...point, geometry: { type: 'Point', coordinates: [200, 0, 0] } }, point] }));
+  const result = await api.gempaGlobal({ limit: 1 });
+  assert.equal(result.status, true, result.message);
+  assert.equal(result.data.events.length, 1);
+  const { longitude, latitude, depthKm, dateTime } = result.data.events[0];
+  assert.deepEqual([longitude, latitude, depthKm, dateTime], [107.5, -6.9, 21, new Date(point.properties.time).toISOString()]);
+  assert.match(calls[0].url.pathname, /\/4\.5_week\.geojson$/);
+});
+
+test('Public API World Bank preserves zero and unavailable annual values', async (t) => {
+  const row = { indicator: { id: 'SP.POP.TOTL' }, country: { value: 'Indonesia' }, countryiso3code: 'IDN' };
+  const calls = mockHTTP(t, () => [{ total: 2 }, [{ ...row, date: '2024', value: 0 }, { ...row, date: '2023', value: null }]]);
+  const result = await api.statistikNegara({ country: 'idn', indicator: 'sp.pop.totl', from: 2023, to: 2024, limit: 2 });
+  assert.equal(result.status, true, result.message);
+  assert.deepEqual(result.data.results, [{ year: 2024, value: 0 }, { year: 2023, value: null }]);
+  assert.equal(calls[0].url.pathname, '/v2/country/IDN/indicator/SP.POP.TOTL');
+  assert.equal(calls[0].url.searchParams.get('date'), '2023:2024');
+  assert.ok(!calls[0].url.searchParams.has('mrnev'));
+  await api.statistikNegara({ limit: 2 });
+  assert.equal(calls[1].url.searchParams.get('mrnev'), '2');
+  assert.ok(!calls[1].url.searchParams.has('date'));
+});
+
+test('Public API geocoding keeps coordinates and accepts the documented empty result', async (t) => {
+  const calls = mockHTTP(t, (url) => url.searchParams.get('name') === 'Bandung'
+    ? { results: [{ id: 1650357, name: 'Kota Bandung', country_code: 'ID', latitude: -6.92, longitude: 107.61, timezone: 'Asia/Jakarta' }] }
+    : { generationtime_ms: 0.5 });
+  const result = await api.geocoding({ name: 'Bandung', country: 'id', limit: '1' });
+  assert.equal(result.status, true, result.message);
+  assert.deepEqual(result.data.results.map(({ latitude, longitude, timezone }) => [latitude, longitude, timezone]), [[-6.92, 107.61, 'Asia/Jakarta']]);
+  assert.equal(calls[0].url.searchParams.get('countryCode'), 'ID');
+  assert.equal(calls[0].url.searchParams.get('count'), '1');
+  const empty = await api.geocoding({ name: 'No Match' });
+  assert.equal(empty.status, true, empty.message);
+  assert.deepEqual(empty.data.results, []);
+});
+
+test('Public API NASA returns only NASA preview links, without fetching assets', async (t) => {
+  const preview = 'https://images-assets.nasa.gov/image/sample/sample~medium.jpg';
+  const calls = mockHTTP(t, () => ({ collection: { items: [{
+    data: [{ media_type: 'image', nasa_id: 'sample', title: 'Sample' }], links: [
+      { render: 'image', href: 'https://images-assets.nasa.gov.example.test/fake.jpg' }, { render: 'image', href: preview }
+    ]
+  }] } }));
+  const result = await api.fotoAngkasa({ q: 'Moon & Earth', limit: 1 });
+  assert.equal(result.status, true, result.message);
+  assert.equal(result.data.results[0].preview, preview);
+  assert.equal(result.data.results[0].url, 'https://images.nasa.gov/details/sample');
+  assert.equal(calls.length, 1);
+  assert.deepEqual([...calls[0].url.searchParams], [['q', 'Moon & Earth'], ['media_type', 'image'], ['page_size', '1'], ['page', '1']]);
+});
+
+test('Public API Spaceflight News returns original article metadata and a numeric page offset', async (t) => {
+  const calls = mockHTTP(t, () => ({ count: 10, next: 'https://api.spaceflightnewsapi.net/v4/articles/?offset=4', results: [
+    { id: 1, title: 'Demo launch', url: 'https://example.test/news', news_site: 'Example' }, { id: 2, title: 'Invalid source', url: 'http://example.test/news' }
+  ] }));
+  const result = await api.beritaAngkasa({ q: 'Lunar launch', limit: 2, offset: 2 });
+  assert.equal(result.status, true, result.message);
+  assert.equal(result.data.nextOffset, 4);
+  assert.deepEqual(result.data.results.map(({ publisher, url }) => [publisher, url]), [['Example', 'https://example.test/news']]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url.searchParams.get('search'), 'Lunar launch');
+});
+
+test('Public API wrappers validate codes, ranges, limits and pagination before requesting data', async (t) => {
+  const calls = mockHTTP(t, () => assert.fail('Request must not happen'));
+  for (const [name, input] of [
+    ['daftarKabupaten', { kode: '31.71' }], ['daftarKecamatan', { kode: '../31' }], ['daftarDesa', { kode: '31.71' }],
+    ['statistikNegara', { from: 2024, to: 2020 }], ['statistikNegara', { from: 2020 }],
+    ['gempaGlobal', { limit: 51 }], ['geocoding', { name: 'A, ID' }], ['geocoding', { name: 'Bandung', country: 'IDN' }],
+    ['fotoAngkasa', { q: 'Moon', page: 0 }], ['beritaAngkasa', { offset: -1 }]
   ]) assert.equal((await api[name](input)).status, false);
   assert.equal(calls.length, 0);
 });
