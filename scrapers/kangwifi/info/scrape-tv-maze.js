@@ -3,6 +3,7 @@
 
 /**
  * Name : TVmaze Show Search
+ * Creator : lmavour
  * Source : https://www.tvmaze.com/api
  * Base Web : https://api.tvmaze.com
  * Type : Scraper

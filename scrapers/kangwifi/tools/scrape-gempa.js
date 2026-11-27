@@ -3,6 +3,7 @@
 
 /**
  * Name : Gempa Terbaru BMKG
+ * Creator : lmavour
  * Source : https://data.bmkg.go.id/gempabumi/
  * Base Web : https://data.bmkg.go.id
  * Type : Scraper

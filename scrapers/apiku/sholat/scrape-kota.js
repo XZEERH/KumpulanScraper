@@ -3,6 +3,7 @@
 
 /**
  * Name : Kota Jadwal Salat
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mencari nama dan ID kota yang tercakup dalam jadwal salat ApiKu.
  * Note : node scrapers/apiku/sholat/scrape-kota.js --q Bogor

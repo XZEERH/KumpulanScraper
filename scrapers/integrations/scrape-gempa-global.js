@@ -3,6 +3,7 @@
 
 /**
  * Name : Gempa Global
+ * Creator : lmavour
  * Source : https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php
  * Base Web : https://earthquake.usgs.gov
  * Type : Scraper

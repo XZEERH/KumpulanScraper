@@ -3,6 +3,7 @@
 
 /**
  * Name : xkcd Comic
+ * Creator : lmavour
  * Source : https://xkcd.com/json.html
  * Base Web : https://xkcd.com
  * Type : Scraper

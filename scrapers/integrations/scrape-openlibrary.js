@@ -3,6 +3,7 @@
 
 /**
  * Name : Open Library Search
+ * Creator : lmavour
  * Base Web : https://openlibrary.org/developers/api
  * Description : Pencarian buku, penulis, ISBN, edisi, dan sampul tanpa API key.
  * Note : Untuk lookup manusia, bukan bulk backend. Daftarkan penggunaan rutin sesuai panduan.

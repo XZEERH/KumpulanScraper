@@ -3,6 +3,7 @@
 
 /**
  * Name : GLM 5.3 Flash AI
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

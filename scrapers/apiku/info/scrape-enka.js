@@ -3,6 +3,7 @@
 
 /**
  * Name : Enka Showcase Publik
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Menampilkan ringkasan profil permainan yang dipublikasikan lewat Enka Network.
  * Note : node scrapers/apiku/info/scrape-enka.js --uid 1810139094

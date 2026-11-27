@@ -3,6 +3,7 @@
 
 /**
  * Name : Prakiraan Cuaca BMKG via ApiKu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil prakiraan cuaca BMKG menurut kode administrasi desa atau kelurahan.
  * Note : node scrapers/apiku/bmkg/scrape-cuaca.js --adm4 31.71.03.1001

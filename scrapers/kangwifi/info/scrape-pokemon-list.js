@@ -3,6 +3,7 @@
 
 /**
  * Name : Pokemon List
+ * Creator : lmavour
  * Source : https://pokeapi.co/api/v2/pokemon/
  * Base Web : https://pokeapi.co
  * Type : Scraper

@@ -3,6 +3,7 @@
 
 /**
  * Name : Open Food Facts Barcode Lookup
+ * Creator : lmavour
  * Base Web : https://openfoodfacts.github.io/openfoodfacts-server/api/
  * Description : Komposisi, nutrisi, alergen, dan metadata barcode tanpa API key.
  * Note : Data komunitas dapat tidak lengkap. Ikuti ODbL/atribusi dan daftarkan penggunaan.

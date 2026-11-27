@@ -3,6 +3,7 @@
 
 /**
  * Name : EQuran
+ * Creator : lmavour
  * Base Web : https://equran.id/apidev/v2
  * Description : Surat, ayat, tafsir, URL audio, dan jadwal salat tanpa API key.
  * Jadwal salat : https://equran.id/apidev/shalat

@@ -3,6 +3,7 @@
 
 /**
  * Name : Uptime ApiKu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Membaca waktu server dan lama layanan berjalan dari endpoint status publik.
  * Note : node scrapers/apiku/info/scrape-uptime.js

@@ -3,6 +3,7 @@
 
 /**
  * Name : MangaDex Metadata
+ * Creator : lmavour
  * Base Web : https://api.mangadex.org/docs/
  * Description : Metadata manga SFW dan daftar chapter/tautan tanpa API key.
  * Note : Tidak mengambil halaman chapter. Ikuti aturan aplikasi pihak ketiga,

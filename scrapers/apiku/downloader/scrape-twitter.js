@@ -3,6 +3,7 @@
 
 /**
  * Name : Media X / Twitter via ApiKu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil tautan media CDN resmi dari unggahan X/Twitter publik dan berizin.
  * Note : node scrapers/apiku/downloader/scrape-twitter.js --url "https://twitter.com/NASAPersevere/status/1363929492138254340"

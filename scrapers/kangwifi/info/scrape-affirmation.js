@@ -3,6 +3,7 @@
 
 /**
  * Name : Daily Affirmation
+ * Creator : lmavour
  * Source : https://www.affirmations.dev/
  * Base Web : https://www.affirmations.dev
  * Type : Scraper

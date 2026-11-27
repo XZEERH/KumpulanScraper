@@ -3,6 +3,7 @@
 
 /**
  * Name : Daftar Channel TV
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Menampilkan nama dan kode stasiun TV Indonesia untuk mencari jadwal tayang.
  * Note : node scrapers/apiku/tv/scrape-channels.js

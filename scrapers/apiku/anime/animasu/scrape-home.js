@@ -3,6 +3,7 @@
 
 /**
  * Name : Katalog Animasu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil metadata judul ongoing dan baru diperbarui, tanpa tautan streaming.
  * Note : node scrapers/apiku/anime/animasu/scrape-home.js --page 1

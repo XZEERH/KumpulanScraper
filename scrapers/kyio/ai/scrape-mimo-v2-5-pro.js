@@ -3,6 +3,7 @@
 
 /**
  * Name : Xiaomi MiMo v2.5 Pro AI
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

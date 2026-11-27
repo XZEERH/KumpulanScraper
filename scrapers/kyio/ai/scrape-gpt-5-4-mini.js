@@ -3,6 +3,7 @@
 
 /**
  * Name : GPT-5.4 Mini AI
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

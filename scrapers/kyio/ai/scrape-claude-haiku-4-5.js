@@ -3,6 +3,7 @@
 
 /**
  * Name : Claude Haiku 4.5 AI
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

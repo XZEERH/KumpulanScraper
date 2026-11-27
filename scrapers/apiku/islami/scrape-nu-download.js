@@ -3,6 +3,7 @@
 
 /**
  * Name : Katalog Dokumen NU Online
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Menampilkan tautan PDF dan audio dari penyimpanan resmi NU, tanpa mengunduh file.
  * Note : node scrapers/apiku/islami/scrape-nu-download.js --category produk-hukum

@@ -3,6 +3,7 @@
 
 /**
  * Name : Katalog Gambar NASA
+ * Creator : lmavour
  * Source : https://api.nasa.gov/#images
  * Base Web : https://images.nasa.gov
  * Type : Scraper

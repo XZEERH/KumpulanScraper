@@ -3,6 +3,7 @@
 
 /**
  * Name : Claude Opus 4.7
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

@@ -3,6 +3,7 @@
 
 /**
  * Name : Katalog Komiku
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Menampilkan judul, slug, dan info rilis dari katalog Komiku tanpa tautan halaman baca.
  * Note : node scrapers/apiku/manga/komiku/scrape-home.js

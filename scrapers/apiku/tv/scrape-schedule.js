@@ -3,6 +3,7 @@
 
 /**
  * Name : Jadwal TV Per Channel
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil jam tayang dan nama acara untuk satu ID channel televisi.
  * Note : node scrapers/apiku/tv/scrape-schedule.js --channel sctv

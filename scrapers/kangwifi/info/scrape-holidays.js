@@ -3,6 +3,7 @@
 
 /**
  * Name : Hari Libur Nager.Date
+ * Creator : lmavour
  * Source : https://date.nager.at/Api
  * Base Web : https://date.nager.at
  * Type : Scraper

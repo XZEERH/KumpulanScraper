@@ -3,6 +3,7 @@
 
 /**
  * Name : Wayback Machine Availability
+ * Creator : lmavour
  * Base Web : https://archive.org/help/wayback_api.php
  * Description : Mencari snapshot arsip sebuah URL tanpa API key.
  * Note : Hanya membaca metadata arsip, tidak menyimpan halaman atau mengakses URL target.

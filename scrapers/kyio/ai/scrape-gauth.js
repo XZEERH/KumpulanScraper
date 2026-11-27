@@ -3,6 +3,7 @@
 
 /**
  * Name : Gauth AI Math & Science Solver
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

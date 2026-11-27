@@ -3,6 +3,7 @@
 
 /**
  * Name : ExchangeRate-API Open Access
+ * Creator : lmavour
  * Source : https://www.exchangerate-api.com/docs/free
  * Base Web : https://open.er-api.com
  * Type : Scraper

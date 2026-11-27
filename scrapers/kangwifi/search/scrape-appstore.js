@@ -3,6 +3,7 @@
 
 /**
  * Name : App Store Search
+ * Creator : lmavour
  * Source : https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/
  * Base Web : https://itunes.apple.com
  * Type : Scraper

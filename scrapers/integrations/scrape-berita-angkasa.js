@@ -3,6 +3,7 @@
 
 /**
  * Name : Berita Antariksa
+ * Creator : lmavour
  * Source : https://api.spaceflightnewsapi.net/v4/docs/
  * Base Web : https://www.spaceflightnewsapi.net
  * Type : Scraper

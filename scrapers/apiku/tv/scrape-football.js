@@ -3,6 +3,7 @@
 
 /**
  * Name : Jadwal Siaran Sepak Bola
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Menampilkan waktu, pertandingan, dan kompetisi tanpa membuka siaran.
  * Note : node scrapers/apiku/tv/scrape-football.js

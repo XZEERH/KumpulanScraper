@@ -3,6 +3,7 @@
 
 /**
  * Name : Open-Meteo
+ * Creator : lmavour
  * Base Web : https://open-meteo.com/en/docs
  * Description : Cuaca dan kualitas udara berdasarkan koordinat tanpa API key.
  * Note : Free API hanya untuk nonkomersial; wajib atribusi Open-Meteo dan sumber data.

@@ -3,6 +3,7 @@
 
 /**
  * Name : Programming Joke
+ * Creator : lmavour
  * Source : https://sv443.net/jokeapi/v2/
  * Base Web : https://v2.jokeapi.dev
  * Type : Scraper

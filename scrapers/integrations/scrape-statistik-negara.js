@@ -3,6 +3,7 @@
 
 /**
  * Name : Statistik Negara Bank Dunia
+ * Creator : lmavour
  * Source : https://datahelpdesk.worldbank.org/knowledgebase/articles/898581-api-basic-call-structures
  * Base Web : https://api.worldbank.org
  * Type : Scraper

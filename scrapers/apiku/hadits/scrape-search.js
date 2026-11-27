@@ -3,6 +3,7 @@
 
 /**
  * Name : Pencarian Hadits
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mencari kata dalam terjemahan hadits dan menampilkan hasil per halaman.
  * Note : node scrapers/apiku/hadits/scrape-search.js --q sabar --limit 2

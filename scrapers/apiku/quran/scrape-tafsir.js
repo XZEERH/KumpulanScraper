@@ -3,6 +3,7 @@
 
 /**
  * Name : Tafsir Surah
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil teks tafsir per ayat berdasarkan nomor surah.
  * Note : node scrapers/apiku/quran/scrape-tafsir.js --nomor 112

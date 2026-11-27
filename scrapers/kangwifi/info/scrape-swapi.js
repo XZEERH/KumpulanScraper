@@ -3,6 +3,7 @@
 
 /**
  * Name : Star Wars Search
+ * Creator : lmavour
  * Source : https://www.swapi.tech/documentation
  * Base Web : https://www.swapi.tech
  * Type : Scraper

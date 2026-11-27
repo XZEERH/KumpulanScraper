@@ -3,6 +3,7 @@
 
 /**
  * Name : Aksara Jawa ke Latin
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengubah teks aksara Jawa Unicode menjadi huruf Latin.
  * Note : node scrapers/apiku/aksara/scrape-jawa-to-latin.js --text <aksara-Jawa>

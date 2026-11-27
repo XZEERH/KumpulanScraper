@@ -3,6 +3,7 @@
 
 /**
  * Name : Steam Store Search
+ * Creator : lmavour
  * Base Web : https://store.steampowered.com/
  * Description : Pencarian game, metadata, gambar, dan harga regional tanpa API key.
  * Note : Endpoint web internal dapat berubah; tidak mengunduh game.

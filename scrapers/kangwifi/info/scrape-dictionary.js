@@ -3,6 +3,7 @@
 
 /**
  * Name : English Dictionary
+ * Creator : lmavour
  * Source : https://dictionaryapi.dev/
  * Base Web : https://api.dictionaryapi.dev
  * Type : Scraper

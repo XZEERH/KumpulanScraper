@@ -3,6 +3,7 @@
 
 /**
  * Name : Hacker News
+ * Creator : lmavour
  * Base Web : https://github.com/HackerNews/API
  * Description : Berita teknologi, Ask/Show HN, skor, jumlah komentar, dan lowongan tanpa API key.
  * Note : Jumlah item dibatasi; tidak melakukan crawl seluruh komentar.

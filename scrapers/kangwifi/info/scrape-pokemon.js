@@ -3,6 +3,7 @@
 
 /**
  * Name : Pokemon Details
+ * Creator : lmavour
  * Source : https://pokeapi.co/docs/v2#pokemon
  * Base Web : https://pokeapi.co
  * Type : Scraper

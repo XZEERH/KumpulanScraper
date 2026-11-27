@@ -3,6 +3,7 @@
 
 /**
  * Name : Cat Facts
+ * Creator : lmavour
  * Source : https://catfact.ninja/
  * Base Web : https://catfact.ninja
  * Type : Scraper

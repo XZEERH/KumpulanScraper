@@ -3,6 +3,7 @@
 
 /**
  * Name : TikTok Media ApiKu V2
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Alternatif untuk tautan video ber-watermark dari unggahan TikTok publik dan berizin.
  * Note : node scrapers/apiku/downloader/scrape-tiktok2.js --url "https://www.tiktok.com/@nasa/video/7699974130153590029"

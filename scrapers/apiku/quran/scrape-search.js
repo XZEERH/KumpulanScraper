@@ -3,6 +3,7 @@
 
 /**
  * Name : Pencarian Ayat Al-Qur'an
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mencari kata dalam terjemahan Indonesia dan menampilkan teks Arab serta nomor ayat.
  * Note : node scrapers/apiku/quran/scrape-search.js --q sabar --size 2

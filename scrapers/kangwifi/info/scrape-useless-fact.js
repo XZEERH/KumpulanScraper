@@ -3,6 +3,7 @@
 
 /**
  * Name : Useless Facts
+ * Creator : lmavour
  * Source : https://uselessfacts.jsph.pl/
  * Base Web : https://uselessfacts.jsph.pl
  * Type : Scraper

@@ -3,6 +3,7 @@
 
 /**
  * Name : Pencarian Animasu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mencari metadata anime berdasarkan judul, tanpa mengembalikan tautan pemutar.
  * Note : node scrapers/apiku/anime/animasu/scrape-search.js --q Naruto

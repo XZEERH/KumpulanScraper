@@ -53,6 +53,14 @@ const apikuRoot = 'scrapers/apiku';
 const apikuFiles = readdirSync(join(root, apikuRoot), { withFileTypes: true, recursive: true })
   .filter((entry) => entry.isFile() && /^scrape-.+\.js$/.test(entry.name))
   .map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/')).sort();
+const nexrayFiles = readdirSync(join(root, 'scrapers/nexray'), { withFileTypes: true, recursive: true })
+  .filter((entry) => entry.isFile() && /^scrape-.+\.js$/.test(entry.name))
+  .map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/')).sort();
+const documentedFiles = readdirSync(join(root, 'scrapers'), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && ['ikhlas', 'azbry', 'prexzy'].includes(entry.name))
+  .flatMap((entry) => readdirSync(join(root, 'scrapers', entry.name), { withFileTypes: true, recursive: true }))
+  .filter((entry) => entry.isFile() && /^scrape-.+\.js$/.test(entry.name))
+  .map((entry) => relative(root, join(entry.parentPath, entry.name)).split(sep).join('/')).sort();
 const entryPoints = [...modules, ...siputzxFiles.map((file) => [file]), ...apikuFiles.map((file) => [file])];
 const api = {};
 const nativeFetch = global.fetch;
@@ -87,8 +95,11 @@ function mockHTTP(t, resolver) {
 }
 
 test('all new modules import without requests, output, or automatic CLI execution', () => {
-  const code = `for(const file of ${JSON.stringify(entryPoints.map(([file]) => `./${file}`))}) require(file); process.stdout.write('OK');`;
-  const child = spawnSync(process.execPath, ['--import', networkBlock, '-e', code], childOptions);
+  const paths = [...entryPoints.map(([file]) => file), ...nexrayFiles, ...documentedFiles];
+  const code = "for(const file of JSON.parse(require('node:fs').readFileSync(0,'utf8'))) require('./'+file); process.stdout.write('OK');";
+  const child = spawnSync(process.execPath, ['--import', networkBlock, '-e', code], {
+    ...childOptions, timeout: 20000, input: JSON.stringify(paths)
+  });
   assert.equal(child.status, 0, child.stderr);
   assert.equal(child.stdout, 'OK');
 });
@@ -139,6 +150,115 @@ for (const [file, name] of entryPoints) {
     assert.match(JSON.parse(bad.stdout).message, /Opsi tidak dikenal/);
   });
 }
+
+test('NexRay has standalone modules with distinct routes and documented CLI options', () => {
+  assert.ok(nexrayFiles.length > 0);
+  const endpoints = new Set();
+  for (const file of nexrayFiles) {
+    const source = readFileSync(join(root, file), 'utf8');
+    const endpoint = source.match(/^const ENDPOINT = '(https:\/\/api\.nexray\.eu\.cc\/[^']+)';$/m)?.[1];
+    assert.ok(endpoint && !endpoints.has(endpoint), file);
+    endpoints.add(endpoint);
+    assert.match(source, /^ \* Creator : lmavour$/m);
+    assert.deepEqual(Object.values(require(join(root, file))).map(value => typeof value), ['function']);
+  }
+  const help = spawnSync(process.execPath, [
+    '--import', networkBlock, 'scrapers/nexray/search/scrape-wikipedia.js', '--help'
+  ], childOptions);
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /--q <nilai>/);
+  assert.match(help.stdout, /Endpoint: search\/wikipedia/);
+});
+
+test('NexRay validates documented arguments and unwraps results without trusting an error envelope', async (t) => {
+  const { nexraySearchWikipedia } = require('../scrapers/nexray/search/scrape-wikipedia');
+  const calls = mockHTTP(t, url => url.searchParams.get('q') === 'error fixture'
+    ? { status: false, result: [{ title: 'not a success' }] }
+    : { status: true, result: [{ title: 'Indonesia' }] });
+  assert.equal((await nexraySearchWikipedia()).status, false);
+  assert.equal(calls.length, 0);
+  const result = await nexraySearchWikipedia({ q: 'Indonesia', extra: 'not forwarded' });
+  assert.deepEqual(result.data, [{ title: 'Indonesia' }]);
+  assert.equal(calls[0].url.href, 'https://api.nexray.eu.cc/search/wikipedia?q=Indonesia');
+  assert.equal(calls[0].options.redirect, 'error');
+  assert.equal((await nexraySearchWikipedia({ q: 'error fixture' })).status, false);
+});
+
+test('NexRay rejects nonpublic image URLs and validates binary responses', async (t) => {
+  const { nexrayCanvasGura } = require('../scrapers/nexray/canvas/scrape-gura');
+  const png = Buffer.from('89504e470d0a1a0a' + '00'.repeat(25), 'hex');
+  const calls = mockHTTP(t, () => new Response(png, { headers: { 'Content-Type': 'image/png' } }));
+  assert.equal((await nexrayCanvasGura({ url: 'https://127.0.0.1/example.png' })).status, false);
+  assert.equal(calls.length, 0);
+  const result = await nexrayCanvasGura({ url: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png' });
+  assert.deepEqual(result.data, { mimeType: 'image/png', base64: png.toString('base64') });
+});
+
+test('NexRay MEGA preserves public share fragments only for MEGA hosts', async (t) => {
+  const { nexrayDownloaderMega } = require('../scrapers/nexray/downloader/scrape-mega');
+  const data = { filename: 'sample.txt', download_url: 'https://example.net/sample.txt' };
+  const calls = mockHTTP(t, () => ({ status: true, result: data }));
+  assert.equal((await nexrayDownloaderMega({ url: 'https://example.net/file/demo#share-fragment' })).status, false);
+  assert.equal(calls.length, 0);
+  const url = 'https://mega.nz/file/demo#share-fragment';
+  assert.deepEqual((await nexrayDownloaderMega({ url })).data, data);
+  assert.equal(calls[0].url.hash, '');
+  assert.equal(calls[0].url.searchParams.get('url'), url);
+});
+
+test('Documented provider modules export one function per distinct route with a CLI', () => {
+  assert.ok(documentedFiles.length > 0);
+  const routes = new Set();
+  for (const file of documentedFiles) {
+    const source = readFileSync(join(root, file), 'utf8');
+    const route = source.match(/^const ENDPOINT = '(https:\/\/[^']+)';$/m)?.[1];
+    assert.ok(route && !routes.has(route), file);
+    routes.add(route);
+    assert.match(source, /^ \* Creator : lmavour$/m);
+    assert.deepEqual(Object.values(require(join(root, file))).map(value => typeof value), ['function']);
+  }
+  const help = spawnSync(process.execPath, ['--import', networkBlock, documentedFiles[0], '--help'], childOptions);
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /Usage: .*scrape-/);
+  assert.match(help.stdout, /Endpoint:/);
+});
+
+test('Documented API validates required arguments and rejects failure envelopes', async (t) => {
+  const { documentedEndpoint } = require('../scrapers/lib/documented-endpoint');
+  const { scrape } = documentedEndpoint('https://ikhlasapi.web.id/api/downloader/github', {
+    source: 'ikhlas', field: 'data', params: { url: { required: true, url: true }, raw: { choices: ['true', 'false'] } }
+  });
+  const data = { repository: 'is-png' };
+  const calls = mockHTTP(t, url => url.searchParams.get('raw') === 'true'
+    ? { status: 500, data }
+    : { success: true, data });
+  assert.equal((await scrape()).status, false);
+  assert.equal((await scrape({ url: 'https://127.0.0.1/metadata' })).status, false);
+  assert.equal(calls.length, 0);
+  const url = 'https://github.com/sindresorhus/is-png?tab=readme#reference';
+  assert.deepEqual((await scrape({ url, ignored: 'not sent' })).data, data);
+  assert.deepEqual([...calls[0].url.searchParams], [['url', 'https://github.com/sindresorhus/is-png?tab=readme']]);
+  assert.equal(calls[0].options.redirect, 'error');
+  assert.equal((await scrape({ url, raw: true })).status, false);
+});
+
+test('Documented API accepts raw JSON, validated images, and plain text', async (t) => {
+  const { documentedEndpoint } = require('../scrapers/lib/documented-endpoint');
+  const audio = { audio_url: 'https://example.net/demo.mp3', text: 'Hello world', duration: 1 };
+  const png = Buffer.from('89504e470d0a1a0a' + '00'.repeat(25), 'hex');
+  const calls = mockHTTP(t, url => {
+    if (url.pathname.endsWith('/tts-mary')) return audio;
+    if (url.pathname.endsWith('/captcha')) return new Response(png, { headers: { 'Content-Type': 'image/png' } });
+    return new Response('Hello world', { headers: { 'Content-Type': 'text/plain' } });
+  });
+  const tts = documentedEndpoint('https://prexzyapis.com/tts/tts-mary', { source: 'prexzy', params: { text: { required: true } } });
+  const image = documentedEndpoint('https://ikhlasapi.web.id/api/canvas/captcha', { source: 'ikhlas', format: 'image' });
+  const style = documentedEndpoint('https://prexzyapis.com/tools/acute', { source: 'prexzy', format: 'text' });
+  assert.deepEqual((await tts.scrape({ text: 'Hello world' })).data, audio);
+  assert.deepEqual((await image.scrape()).data, { mimeType: 'image/png', base64: png.toString('base64') });
+  assert.equal((await style.scrape()).data, 'Hello world');
+  assert.equal(calls.length, 3);
+});
 
 test('ApiKu files use distinct endpoints and keep the provider name in the folder', () => {
   assert.ok(apikuFiles.length >= 41);

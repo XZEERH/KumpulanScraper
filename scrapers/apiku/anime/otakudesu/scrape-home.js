@@ -3,6 +3,7 @@
 
 /**
  * Name : Katalog Otakudesu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Menampilkan metadata anime yang sedang atau sudah selesai tayang.
  * Note : node scrapers/apiku/anime/otakudesu/scrape-home.js

@@ -3,6 +3,7 @@
 
 /**
  * Name : Detail Bacaan Tahlil
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil satu butir bacaan tahlil beserta transliterasi dan terjemahan.
  * Note : node scrapers/apiku/islami/scrape-tahlil-detail.js --number 1

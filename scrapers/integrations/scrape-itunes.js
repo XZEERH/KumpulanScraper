@@ -3,6 +3,7 @@
 
 /**
  * Name : iTunes Search
+ * Creator : lmavour
  * Base Web : https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/
  * Description : Metadata musik, podcast, film, dan buku serta tautan toko tanpa API key.
  * Note : Artwork/preview mengikuti ketentuan promosi Apple; tidak menyimpan atau mengunduh preview audio.

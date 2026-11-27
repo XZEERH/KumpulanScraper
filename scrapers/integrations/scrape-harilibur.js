@@ -3,6 +3,7 @@
 
 /**
  * Name : Hari Libur Indonesia
+ * Creator : lmavour
  * Base Web : https://github.com/guangrei/APIHariLibur_V2
  * Description : Kalender libur/perayaan Indonesia dari JSON publik tanpa API key.
  * Note : Data komunitas berbasis Google Calendar, bukan keputusan resmi pemerintah.

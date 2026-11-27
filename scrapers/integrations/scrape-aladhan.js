@@ -3,6 +3,7 @@
 
 /**
  * Name : Aladhan
+ * Creator : lmavour
  * Base Web : https://aladhan.com/prayer-times-api
  * Description : Jadwal salat dan kalender Hijriah berdasarkan kota tanpa API key.
  * Note : Default metode 20 (Kemenag); hasil tetap merupakan perhitungan astronomis.

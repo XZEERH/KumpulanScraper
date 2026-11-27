@@ -3,6 +3,7 @@
 
 /**
  * Name : Llama 3.3 70B AI
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

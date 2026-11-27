@@ -3,6 +3,7 @@
 
 /**
  * Name : ISS Location
+ * Creator : lmavour
  * Source : https://wheretheiss.at/w/developer
  * Base Web : https://api.wheretheiss.at
  * Type : Scraper

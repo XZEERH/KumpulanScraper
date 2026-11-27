@@ -3,6 +3,7 @@
 
 /**
  * Name : Pencarian Otakudesu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mencari metadata judul anime, status, dan genre dari katalog Otakudesu.
  * Note : node scrapers/apiku/anime/otakudesu/scrape-search.js --q Naruto

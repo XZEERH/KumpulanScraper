@@ -3,6 +3,7 @@
 
 /**
  * Name : OpenAI GPT-4.1 Flagship
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

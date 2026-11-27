@@ -3,6 +3,7 @@
 
 /**
  * Name : Crossref Works Search
+ * Creator : lmavour
  * Source : https://www.crossref.org/documentation/retrieve-metadata/rest-api/
  * Base Web : https://api.crossref.org
  * Type : Scraper

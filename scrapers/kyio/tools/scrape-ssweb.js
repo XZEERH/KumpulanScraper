@@ -3,6 +3,7 @@
 
 /**
  * Name : Website Screenshot
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

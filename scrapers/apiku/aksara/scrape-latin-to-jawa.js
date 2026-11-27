@@ -3,6 +3,7 @@
 
 /**
  * Name : Latin ke Aksara Jawa
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengubah teks Latin menjadi aksara Jawa, dengan pilihan penggunaan Murda.
  * Note : node scrapers/apiku/aksara/scrape-latin-to-jawa.js --text "Sugeng enjing" --murda false

@@ -3,6 +3,7 @@
 
 /**
  * Name : Katalog Kitab Maulid
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil judul, pengarang, dan tautan kitab maulid dari katalog NU Online.
  * Note : node scrapers/apiku/islami/scrape-maulid-books.js

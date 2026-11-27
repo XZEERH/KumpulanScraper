@@ -3,6 +3,7 @@
 
 /**
  * Name : Metadata Detail Otakudesu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Membaca metadata anime, sinopsis, dan jumlah episode tanpa tautan pemutar.
  * Note : node scrapers/apiku/anime/otakudesu/scrape-detail.js --slug koori-jouheki-s2-sub-indo

@@ -3,6 +3,7 @@
 
 /**
  * Name : Daftar Surah Al-Qur'an
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil nomor, nama, dan jumlah ayat 114 surah lewat ApiKu.
  * Note : node scrapers/apiku/quran/scrape-surat-list.js

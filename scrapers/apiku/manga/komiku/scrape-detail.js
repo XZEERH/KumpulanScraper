@@ -3,6 +3,7 @@
 
 /**
  * Name : Metadata Detail Komiku
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Membaca judul, sinopsis, genre, dan jumlah chapter tanpa proxy gambar.
  * Note : node scrapers/apiku/manga/komiku/scrape-detail.js --slug archmage-restaurant

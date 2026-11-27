@@ -3,6 +3,7 @@
 
 /**
  * Name : Advice Slip
+ * Creator : lmavour
  * Source : https://api.adviceslip.com/
  * Base Web : https://api.adviceslip.com
  * Type : Scraper

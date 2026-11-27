@@ -3,6 +3,7 @@
 
 /**
  * Name : Naskah Khutbah MUI
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Membaca naskah khutbah dari URL artikel MUI yang ditemukan di scrape-khutbah.js.
  * Note : node scrapers/apiku/islami/scrape-khutbah-detail.js --url "https://mui.or.id/baca/khutbah/<slug>"

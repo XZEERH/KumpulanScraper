@@ -3,6 +3,7 @@
 
 /**
  * Name : Hadits Per Imam
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Menampilkan satu halaman daftar hadits dari imam yang dipilih.
  * Note : node scrapers/apiku/hadits/scrape-list.js --imam bukhari --page 1 --limit 2

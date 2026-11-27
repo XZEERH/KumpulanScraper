@@ -3,6 +3,7 @@
 
 /**
  * Name : QuickChart QR Code
+ * Creator : lmavour
  * Source : https://quickchart.io/documentation/qr-codes/
  * Base Web : https://quickchart.io
  * Type : Scraper

@@ -3,6 +3,7 @@
 
 /**
  * Name : FLUX 2 Pro Image Generator
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

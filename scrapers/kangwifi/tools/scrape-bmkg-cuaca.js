@@ -3,6 +3,7 @@
 
 /**
  * Name : Prakiraan Cuaca BMKG
+ * Creator : lmavour
  * Source : https://data.bmkg.go.id/prakiraan-cuaca/
  * Base Web : https://api.bmkg.go.id
  * Type : Scraper

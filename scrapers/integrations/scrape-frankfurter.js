@@ -3,6 +3,7 @@
 
 /**
  * Name : Frankfurter
+ * Creator : lmavour
  * Base Web : https://frankfurter.dev/
  * Description : Kurs referensi dan konversi mata uang tanpa API key.
  * Note : Bukan kurs transaksi bank atau harga trading realtime.

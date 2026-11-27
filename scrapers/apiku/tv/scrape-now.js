@@ -3,6 +3,7 @@
 
 /**
  * Name : Acara TV Sedang Tayang
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil daftar acara yang sedang tayang pada stasiun TV nasional.
  * Note : node scrapers/apiku/tv/scrape-now.js

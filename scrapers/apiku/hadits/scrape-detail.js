@@ -3,6 +3,7 @@
 
 /**
  * Name : Detail Hadits
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil kitab, bab, dan terjemahan satu hadits berdasarkan imam dan nomor.
  * Note : node scrapers/apiku/hadits/scrape-detail.js --imam bukhari --number 1

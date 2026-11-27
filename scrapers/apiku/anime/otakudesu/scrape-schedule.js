@@ -3,6 +3,7 @@
 
 /**
  * Name : Jadwal Rilis Otakudesu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil daftar judul yang dijadwalkan per hari, tanpa tautan siaran.
  * Note : node scrapers/apiku/anime/otakudesu/scrape-schedule.js

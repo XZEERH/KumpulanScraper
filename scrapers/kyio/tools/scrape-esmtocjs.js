@@ -3,6 +3,7 @@
 
 /**
  * Name : ESM to CJS
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

@@ -3,6 +3,7 @@
 
 /**
  * Name : Bacaan Tahlil
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil satu halaman bacaan tahlil dalam teks Arab, latin, dan terjemahan.
  * Note : node scrapers/apiku/islami/scrape-tahlil.js --page 1 --limit 2

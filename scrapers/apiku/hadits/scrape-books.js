@@ -3,6 +3,7 @@
 
 /**
  * Name : Daftar Kitab Hadits
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Menampilkan daftar imam perawi dan jumlah hadits dalam katalog ApiKu.
  * Note : node scrapers/apiku/hadits/scrape-books.js

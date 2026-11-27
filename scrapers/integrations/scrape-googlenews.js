@@ -3,6 +3,7 @@
 
 /**
  * Name : Google News RSS Search
+ * Creator : lmavour
  * Base Web : https://news.google.com/
  * Description : Judul berita, penerbit, tanggal, dan tautan RSS tanpa API key.
  * Note : Tautan tetap milik Google News; tidak membongkar redirect atau mengambil artikel penuh.

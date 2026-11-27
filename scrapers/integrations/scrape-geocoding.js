@@ -3,6 +3,7 @@
 
 /**
  * Name : Geocoding Kota dan Kode Pos
+ * Creator : lmavour
  * Source : https://open-meteo.com/en/docs/geocoding-api
  * Base Web : https://geocoding-api.open-meteo.com
  * Type : Scraper

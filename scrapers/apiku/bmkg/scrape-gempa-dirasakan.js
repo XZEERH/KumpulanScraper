@@ -3,6 +3,7 @@
 
 /**
  * Name : Gempa Dirasakan BMKG
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil daftar gempa dan laporan wilayah yang merasakan guncangan.
  * Note : node scrapers/apiku/bmkg/scrape-gempa-dirasakan.js

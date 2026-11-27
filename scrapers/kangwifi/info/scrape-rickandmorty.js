@@ -3,6 +3,7 @@
 
 /**
  * Name : Rick and Morty Characters
+ * Creator : lmavour
  * Source : https://rickandmortyapi.com/documentation
  * Base Web : https://rickandmortyapi.com
  * Type : Scraper

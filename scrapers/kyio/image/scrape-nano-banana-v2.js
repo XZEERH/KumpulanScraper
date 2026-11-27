@@ -3,6 +3,7 @@
 
 /**
  * Name : Nano-Banana Image to Image
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

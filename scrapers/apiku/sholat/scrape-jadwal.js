@@ -3,6 +3,7 @@
 
 /**
  * Name : Jadwal Salat ApiKu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil jadwal salat kota atau kabupaten di Indonesia untuk satu bulan.
  * Note : node scrapers/apiku/sholat/scrape-jadwal.js --kota Bogor --bulan 11 --tahun 2026

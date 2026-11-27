@@ -3,6 +3,7 @@
 
 /**
  * Name : Metadata Detail Animasu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Membaca judul, genre, studio, dan jumlah episode dari slug katalog Animasu.
  * Note : node scrapers/apiku/anime/animasu/scrape-detail.js --slug sora-wa-akai-kawa-no-hotori

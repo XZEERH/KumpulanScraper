@@ -3,6 +3,7 @@
 
 /**
  * Name : NVIDIA Nemotron 3 Super 120B
+ * Creator : lmavour
  * Source : https://api.kyio.web.id/docs
  * Base Web : https://api.kyio.web.id
  * Type : Scraper

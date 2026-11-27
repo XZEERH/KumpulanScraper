@@ -3,6 +3,7 @@
 
 /**
  * Name : Detail Surah Al-Qur'an
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mengambil ayat, terjemahan, dan tautan audio untuk satu surah.
  * Note : node scrapers/apiku/quran/scrape-surat.js --nomor 112

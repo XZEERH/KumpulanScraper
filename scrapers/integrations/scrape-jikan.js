@@ -3,6 +3,7 @@
 
 /**
  * Name : Jikan Search
+ * Creator : lmavour
  * Base Web : https://docs.api.jikan.moe/
  * Description : Pencarian metadata anime, manga, dan karakter MyAnimeList tanpa API key.
  * Note : Konten anime/manga memakai filter SFW; jeda request berlaku per proses.

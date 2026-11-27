@@ -3,6 +3,7 @@
 
 /**
  * Name : Wikipedia Search
+ * Creator : lmavour
  * Source : https://www.mediawiki.org/wiki/API:REST_API/Reference
  * Base Web : https://wikipedia.org
  * Type : Scraper

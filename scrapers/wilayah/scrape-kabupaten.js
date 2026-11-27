@@ -3,6 +3,7 @@
 
 /**
  * Name : Daftar Kabupaten dan Kota
+ * Creator : lmavour
  * Source : https://wilayah.id/
  * Base Web : https://wilayah.id
  * Type : Scraper

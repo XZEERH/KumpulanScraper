@@ -3,6 +3,7 @@
 
 /**
  * Name : npm Registry
+ * Creator : lmavour
  * Base Web : https://github.com/npm/registry/blob/main/docs/REGISTRY-API.md
  * Description : Cari package, metadata versi terbaru, dan jumlah download tanpa API key.
  * Note : Hanya membaca metadata; tidak menginstal atau menjalankan package target.

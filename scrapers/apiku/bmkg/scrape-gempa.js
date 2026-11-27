@@ -3,6 +3,7 @@
 
 /**
  * Name : Gempa BMKG via ApiKu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Menampilkan gempa terbaru, potensi tsunami, dan daftar gempa M5+ dari BMKG.
  * Note : node scrapers/apiku/bmkg/scrape-gempa.js

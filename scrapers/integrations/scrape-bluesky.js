@@ -3,6 +3,7 @@
 
 /**
  * Name : Bluesky Public Profile / Feed
+ * Creator : lmavour
  * Base Web : https://docs.bsky.app/docs/api
  * Description : Profil dan feed akun publik Bluesky tanpa login atau API key.
  */

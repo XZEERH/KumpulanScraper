@@ -3,6 +3,7 @@
 
 /**
  * Name : arXiv Paper Search
+ * Creator : lmavour
  * Source : https://info.arxiv.org/help/api/user-manual.html
  * Base Web : https://arxiv.org
  * Type : Scraper

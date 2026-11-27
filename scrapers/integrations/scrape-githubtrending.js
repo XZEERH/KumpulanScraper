@@ -3,6 +3,7 @@
 
 /**
  * Name : GitHub Trending
+ * Creator : lmavour
  * Base Web : https://github.com/trending
  * Description : Repo trending berdasarkan bahasa dan periode tanpa API key.
  * Note : Parser HTML dapat berubah; tidak mencoba melewati CAPTCHA atau rate limit.

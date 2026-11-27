@@ -3,6 +3,7 @@
 
 /**
  * Name : Dog API Facts
+ * Creator : lmavour
  * Source : https://dogapi.dog/docs/api-v2
  * Base Web : https://dogapi.dog
  * Type : Scraper

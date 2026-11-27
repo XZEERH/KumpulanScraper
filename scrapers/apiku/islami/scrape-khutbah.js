@@ -3,6 +3,7 @@
 
 /**
  * Name : Daftar Khutbah MUI
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Menampilkan judul dan tautan naskah khutbah dari MUI.
  * Note : node scrapers/apiku/islami/scrape-khutbah.js --page 1 --limit 3

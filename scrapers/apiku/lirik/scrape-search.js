@@ -3,6 +3,7 @@
 
 /**
  * Name : Pencarian Lirik Lagu
+ * Creator : lmavour
  * Source : https://apiku.irengcloud.com/docs/
  * Description : Mencari judul dan artis serta lirik biasa atau LRC jika tersedia.
  * Note : node scrapers/apiku/lirik/scrape-search.js --q "Twinkle Twinkle Little Star"

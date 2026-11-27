@@ -3,6 +3,7 @@
 
 /**
  * Name : Pencarian anime/manga via AniList
+ * Creator : lmavour
  * Base Web : https://anilist.gitbook.io/anilist-apiv2-docs/docs/guide/graphql
  * Note : Lookup judul sesuai permintaan. Bukan untuk penyimpanan atau pengambilan data massal.
  */

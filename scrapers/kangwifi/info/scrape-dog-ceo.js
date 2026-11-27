@@ -3,6 +3,7 @@
 
 /**
  * Name : Dog CEO Images
+ * Creator : lmavour
  * Source : https://dog.ceo/dog-api/documentation/
  * Base Web : https://dog.ceo
  * Type : Scraper
