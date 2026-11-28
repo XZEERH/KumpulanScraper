@@ -1,0 +1,271 @@
+'use strict';
+
+// Explicit opt-in through npm run test:live. Public lookups and generation; no publishing, uploads, or account creation.
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const options = { timeout: 25000, cache: false, limit: 1 };
+const chat = { prompt: 'Balas dengan salam Halo dalam satu kalimat.', system: 'Jawab singkat dalam bahasa Indonesia.', temperature: 0.7 };
+const instagram = 'https://www.instagram.com/reel/C7g8V7lKDLw/'; // NPS / Alex Cohen, public domain per NPS usage notice.
+const tiktok = 'https://www.tiktok.com/@nasa/video/7699974130153590029';
+const checks = [
+  ['EQuran', () => require('../scrapers/integrations/scrape-equran').equran('surat', { ...options, surah: 112 })],
+  ['EQuran shalat', () => require('../scrapers/integrations/scrape-equran').equran('shalat', { ...options, provinsi: 'Jawa Barat', kabkota: 'Kota Bogor', bulan: 11, tahun: 2026 }),
+    (result) => { assert.equal(result.data.kabkota, 'Kota Bogor'); assert.equal(result.data.jadwal.length, 30); }],
+  ['AniList anime', () => require('../scrapers/integrations/scrape-anilist').anilist('Naruto', options),
+    (result) => assert.match(result.results[0].title, /^naruto$/i)],
+  ['AniList manga', () => require('../scrapers/integrations/scrape-anilist').anilist('One Piece', { ...options, type: 'manga' }),
+    (result) => assert.match(result.results[0].title, /^one piece$/i)],
+  ['Aladhan', () => require('../scrapers/integrations/scrape-aladhan').aladhan('Jakarta', 'Indonesia', options)],
+  ['Frankfurter', () => require('../scrapers/integrations/scrape-frankfurter').frankfurter('USD', 'IDR', options)],
+  ['Steam', () => require('../scrapers/integrations/scrape-steam').steam('Stardew Valley', options)],
+  ['Open-Meteo', () => require('../scrapers/integrations/scrape-openmeteo').openmeteo(-6.1754, 106.8272, { ...options, mode: 'air-quality', days: 1 })],
+  ['Bluesky', () => require('../scrapers/integrations/scrape-bluesky').bluesky('bsky.app', options)],
+  ['Jikan', () => require('../scrapers/integrations/scrape-jikan').jikan('Naruto', options)],
+  ['Google News RSS', () => require('../scrapers/integrations/scrape-googlenews').googleNews('teknologi Indonesia', options)],
+  ['Open Library', () => require('../scrapers/integrations/scrape-openlibrary').openlibrary('Dune', options)],
+  ['iTunes', () => require('../scrapers/integrations/scrape-itunes').itunes('BBC Global News', { ...options, type: 'podcast', country: 'US' })],
+  ['MangaDex', () => require('../scrapers/integrations/scrape-mangadex').mangadex('One Piece', options)],
+  ['GitHub Trending', () => require('../scrapers/integrations/scrape-githubtrending').githubTrending('javascript', options)],
+  ['Hari Libur', () => require('../scrapers/integrations/scrape-harilibur').hariLibur(new Date().getFullYear(), options)],
+  ['npm', () => require('../scrapers/integrations/scrape-npm').npmScraper('cheerio', { ...options, mode: 'package' })],
+  ['Hacker News', () => require('../scrapers/integrations/scrape-hackernews').hackernews('top', options)],
+  ['Open Food Facts staging', () => require('../scrapers/integrations/scrape-openfoodfacts').openfoodfacts('3274080005003', { ...options, staging: true })],
+  ['Wayback', () => require('../scrapers/integrations/scrape-wayback').wayback('https://example.com', options)],
+  ['Siputzx Antara', () => require('../scrapers/siputzx/berita/scrape-antara').beritaAntara(options),
+    (result) => assert.ok(result.data[0]?.title)],
+  ['Siputzx BMKG', () => require('../scrapers/siputzx/info/scrape-bmkg').infoBmkg(options),
+    (result) => assert.ok(result.data.auto)],
+  ['Siputzx tebak logo', () => require('../scrapers/siputzx/games/scrape-tebaklogo').gamesTebakLogo(options),
+    (result) => assert.ok(Object.keys(result.data.data ?? {}).length > 0)],
+  ['Siputzx maths', () => require('../scrapers/siputzx/games/scrape-maths').gamesMaths({ ...options, level: 'easy' }),
+    (result) => assert.ok(result.data.str)],
+  ['Siputzx AI QwQ', () => require('../scrapers/siputzx/ai/scrape-qwq32b').aiQwq32b({
+    prompt: 'Halo, siapa kamu?', system: 'You are a helpful assistant.', temperature: 0.7
+  }), (result) => assert.ok(result.data.response.trim())],
+  ['Siputzx AI GPT OSS', () => require('../scrapers/siputzx/ai/scrape-gptoss120b').aiGptOss120b(chat),
+    (result) => assert.ok(result.data.response.trim())],
+  ['Siputzx AI GLM', () => require('../scrapers/siputzx/ai/scrape-glm47flash').aiGlm47Flash(chat),
+    (result) => assert.ok(result.data.response.trim())],
+  ['Siputzx AI DeepSeek', () => require('../scrapers/siputzx/ai/scrape-deepseekr1').aiDeepSeekR1({
+    ...chat, prompt: 'Berapa 2 + 2? Jawab dengan satu angka saja.'
+  }), (result) => assert.ok(result.data.response.trim())],
+  ['Siputzx AI Gita', () => require('../scrapers/siputzx/ai/scrape-gita').aiGita({ q: 'What is the Bhagavad Gita?' }),
+    (result) => assert.ok(result.data.trim())],
+  ['Siputzx AI Bible', () => require('../scrapers/siputzx/ai/scrape-bibleai').aiBibleAI({
+    question: 'Where is the parable of the mustard seed?', translation: 'ESV'
+  }), (result) => assert.ok(result.data.results.answer.trim())],
+  ['Siputzx AI Meta', () => require('../scrapers/siputzx/ai/scrape-metaai').aiMetaAI({ query: 'Berapa 2 + 2? Jawab dengan satu angka saja.' }),
+    (result) => assert.ok(result.data.trim())],
+  ['Siputzx Brat PNG', () => require('../scrapers/siputzx/maker/scrape-brat').makeBrat({ text: 'Halo' }),
+    (result) => assert.equal(result.data.mimeType, 'image/png')],
+  ['Siputzx Brat GIF', () => require('../scrapers/siputzx/maker/scrape-brat').makeBrat({ text: 'Halo dunia', isAnimated: true, delay: 500 }),
+    (result) => assert.equal(result.data.mimeType, 'image/gif')],
+  ['Siputzx Downloader GitHub', () => require('../scrapers/siputzx/downloader/scrape-github').downloadGithub({ url: 'https://github.com/sindresorhus/is-png' }),
+    (result) => assert.equal(result.data.repo, 'is-png')],
+  ['Siputzx Downloader FastDL', () => require('../scrapers/siputzx/downloader/scrape-fastdl').downloadFastDL({ url: instagram })],
+  ['Siputzx Downloader SSSInstagram', () => require('../scrapers/siputzx/downloader/scrape-sssinstagram').downloadSSSInstagram({ url: instagram })],
+  ['Siputzx Downloader iGram', () => require('../scrapers/siputzx/downloader/scrape-igram').downloadIGram({ url: instagram })],
+  ['Siputzx Downloader Ummy', () => require('../scrapers/siputzx/downloader/scrape-ummy').downloadUmmy({ url: instagram })],
+  ['Siputzx Downloader TikTok', () => require('../scrapers/siputzx/downloader/scrape-tiktok').downloadTikTok({ url: tiktok })],
+  ['Siputzx Downloader TikTok V2', () => require('../scrapers/siputzx/downloader/scrape-tiktok-v2').downloadTikTokV2({ url: tiktok })],
+  ['Siputzx Downloader Douyin', () => require('../scrapers/siputzx/downloader/scrape-douyin').downloadDouyin({ url: tiktok })],
+  ['Siputzx Downloader 9xbuddy', () => require('../scrapers/siputzx/downloader/scrape-9xbuddy').download9xBuddy({
+    url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ' // Big Buck Bunny, Blender Foundation, CC BY.
+  }), (result) => assert.match(result.data.title, /Big Buck Bunny/i)],
+  ['Siputzx Downloader Lahelu', () => require('../scrapers/siputzx/downloader/scrape-lahelu').downloadLahelu({ url: 'https://lahelu.com/post/PhuP6LKpL' }),
+    (result) => assert.equal(result.data.postId, 'PhuP6LKpL')],
+  ['FreeAPI voices', () => require('../scrapers/freeapi/scrape-voices').freeapiVoices({ language: 'id-ID', limit: 2, cache: false }),
+    (result) => assert.match(result.data.voices[0]?.edgeVoice, /^id-ID-/)],
+  ['FreeAPI TTS MP3', () => require('../scrapers/freeapi/scrape-tts').freeapiTts({ text: 'Hello from Kumpulan Scraper.', voiceIndex: 1 }),
+    (result) => assert.equal(result.data.mimeType, 'audio/mpeg')],
+  ['FreeAPI HandSter PNG', () => require('../scrapers/freeapi/scrape-hand').freeapiHand({ text: 'Hello from Kumpulan Scraper' }),
+    (result) => assert.equal(result.data.mimeType, 'image/png')],
+  ['FreeAPI WikSter PDF', () => require('../scrapers/freeapi/scrape-wikipdf').freeapiWikiPdf({ query: 'Example.com' }),
+    (result) => assert.equal(result.data.mimeType, 'application/pdf')],
+  ['FreeAPI PixelSter', () => require('../scrapers/freeapi/scrape-tti').freeapiTextToImage({
+    prompt: 'A flat icon of a yellow flower on a white background', timeout: 50000
+  }), (result) => assert.equal(new URL(result.data.imageUrl).hostname, 'access.vheer.com')],
+  ['FreeAPI MedSter search', () => require('../scrapers/freeapi/scrape-medster-search').freeapiMedicineSearch({ q: 'panadol', cache: false }),
+    (result) => assert.match(result.data.results[0]?.name, /panadol/i)]
+];
+
+const kangwifi = [
+  ['search/wikipedia', 'wikipedia', { q: 'Indonesia', lang: 'id', limit: 2 }, (data) => assert.ok(data.results.length)],
+  ['search/appstore', 'appstore', { query: 'Keynote', country: 'ID', limit: 2 }, (data) => assert.ok(data.results.some(({ name }) => /keynote/i.test(name)))],
+  ['tools/gempa', 'gempa', {}, (data) => assert.ok(Number.isFinite(data.magnitude))],
+  ['tools/bmkg-cuaca', 'bmkgCuaca', { adm4: '31.71.03.1001' }, (data) => assert.ok(data.forecasts.length)],
+  ['info/arxiv', 'arxiv', { q: 'machine learning', limit: 1 }, (data) => assert.ok(data.results[0]?.authors.length)],
+  ['info/crossref', 'crossref', { q: 'machine learning', limit: 2 }, (data) => assert.match(data.results[0]?.doi, /^10\./)],
+  ['info/dictionary', 'dictionary', { word: 'hello' }, (data) => assert.ok(data.entries[0]?.meanings.length)],
+  ['info/holidays', 'holidays', { country: 'ID', year: 2026 }, (data) => assert.ok(data.results.length)],
+  ['info/dog-ceo', 'dogImages', { breed: 'retriever/golden', count: 2 }, (data) => assert.equal(data.images.length, 2)],
+  ['info/cat-facts', 'catFacts', { count: 2 }, (data) => assert.equal(data.facts.length, 2)],
+  ['info/dog-facts', 'dogFacts', { count: 2 }, (data) => assert.ok(data.facts.length)],
+  ['info/advice', 'advice', {}, (data) => assert.ok(data.advice.trim())],
+  ['info/affirmation', 'affirmation', {}, (data) => assert.ok(data.affirmation.trim())],
+  ['info/useless-fact', 'uselessFact', { lang: 'de' }, (data) => assert.ok(data.text.trim())],
+  ['info/joke', 'joke', {}, (data) => assert.ok(data.setup.trim() && data.punchline.trim())],
+  ['info/pokemon', 'pokemon', { name: 'pikachu' }, (data) => assert.ok(data.types.includes('electric'))],
+  ['info/pokemon-list', 'pokemonList', { limit: 2, offset: 0 }, (data) => assert.equal(data.results.length, 2)],
+  ['info/rickandmorty', 'rickAndMorty', { name: 'rick' }, (data) => assert.ok(data.results.length)],
+  ['info/swapi', 'starWars', { name: 'Luke Skywalker' }, (data) => assert.equal(data.results[0]?.name, 'Luke Skywalker')],
+  ['info/tv-maze', 'tvMaze', { q: 'Sherlock', limit: 2 }, (data) => assert.ok(data.results.length)],
+  ['info/xkcd', 'xkcd', { id: 614 }, (data) => assert.equal(data.id, 614)],
+  ['info/exchangerate', 'exchangeRate', { base: 'USD', target: 'IDR', amount: 2 }, (data) => assert.ok(data.converted > 0)],
+  ['info/qr-api', 'qrCode', { text: 'Contoh KumpulanScraperv2', size: 200 }, (data) => {
+    assert.equal(data.mimeType, 'image/png');
+    assert.equal(Buffer.from(data.base64, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  }],
+  ['info/iss-location', 'issLocation', {}, (data) => assert.ok(data.timestamp > 0)]
+];
+for (const [route, name, input, verify] of kangwifi) {
+  const [category, file] = route.split('/');
+  checks.push([`Kangwifi ${route}`, () => require(`../scrapers/kangwifi/${category}/scrape-${file}`)[name]({ ...options, ...input }),
+    (result) => verify(result.data)]);
+}
+
+const apiku = [
+  ['hadits/books', {}, (data) => assert.equal(data.length, 9)],
+  ['hadits/search', { q: 'sabar', limit: 2, page: 1 }, (data) => assert.ok(data.results.length)],
+  ['hadits/list', { imam: 'bukhari', limit: 2, page: 1 }, (data) => assert.equal(data.results[0]?.number, 1)],
+  ['hadits/detail', { imam: 'bukhari', number: 1 }, (data) => assert.equal(data.number, 1)],
+  ['sholat/jadwal', { kota: 'Bogor', bulan: 11, tahun: 2026 }, (data) => assert.equal(data.jadwal_bulanan.length, 30)],
+  ['sholat/kota', { q: 'Bogor' }, (data) => assert.ok(data.some(({ kota }) => /bogor/i.test(kota)))],
+  ['quran/surat-list', {}, (data) => assert.equal(data.length, 114)],
+  ['quran/surat', { nomor: 112 }, (data) => assert.equal(data.ayat.length, 4)],
+  ['quran/tafsir', { nomor: 112 }, (data) => assert.equal(data.tafsir.length, 4)],
+  ['quran/search', { q: 'sabar', page: 1, size: 2 }, (data) => assert.ok(data.results.length)],
+  ['islami/khutbah', { page: 1, limit: 2 }, (data) => assert.equal(data.results.length, 2)],
+  ['islami/khutbah-detail', {
+    url: 'https://mui.or.id/baca/khutbah/khutbah-jumat-cermin-kesempurnaan-iman-dimulai-dari-kasih-sayang-pada-keluarga'
+  }, (data) => assert.ok(data.paragraphs.length)],
+  ['islami/maulid-books', {}, (data) => assert.equal(data.length, 7)],
+  ['islami/tahlil', { page: 1, limit: 2 }, (data) => assert.equal(data.data.length, 2)],
+  ['islami/tahlil-detail', { number: 1 }, (data) => assert.equal(data.verse.number, 1)],
+  ['islami/nu-download', { category: 'produk-hukum' }, (data) => assert.ok(data.results.some(({ type }) => /^pdf$/i.test(type)))],
+  ['aksara/latin-to-jawa', { text: 'Sugeng enjing', murda: 'false' }, (data) => assert.match(data.output, /[\uA980-\uA9DF]/u)],
+  ['aksara/jawa-to-latin', { text: '\ua9b1\ua9b8\ua992\ua9bc\ua981' }, (data) => assert.match(data.output, /[a-z]/i)],
+  ['lirik/search', { q: 'Twinkle Twinkle Little Star' }, (data) => assert.ok(data.length)],
+  ['lirik/detail', { judul: 'Yellow', artis: 'Coldplay' }, (data) => assert.match(data.judul, /^yellow$/i)],
+  ['bmkg/gempa', {}, (data) => assert.ok(data.latest?.DateTime)],
+  ['bmkg/gempa-dirasakan', {}, (data) => assert.ok(data.events.length)],
+  ['bmkg/cuaca', { adm4: '31.71.03.1001' }, (data) => assert.equal(data.lokasi.adm4, '31.71.03.1001')],
+  ['tv/channels', {}, (data) => assert.ok(data.some(({ id }) => id === 'sctv'))],
+  ['tv/schedule', { channel: 'sctv' }, (data) => assert.ok(data.programs.length)],
+  ['tv/now', {}, (data) => assert.ok(Array.isArray(data))],
+  ['tv/football', {}, (data) => assert.ok(Array.isArray(data))],
+  ['anime/animasu/home', { page: 1 }, (data) => assert.ok(data.ongoing.length || data.updated.length)],
+  ['anime/animasu/search', { q: 'Naruto' }, (data) => assert.ok(data.length)],
+  ['anime/animasu/detail', { slug: 'sora-wa-akai-kawa-no-hotori' }, (data) => assert.ok(data.title)],
+  ['anime/otakudesu/home', {}, (data) => assert.ok(data.ongoing.length || data.complete.length)],
+  ['anime/otakudesu/schedule', {}, (data) => assert.ok(data.some(({ titles }) => titles.length))],
+  ['anime/otakudesu/search', { q: 'Naruto' }, (data) => assert.ok(data.length)],
+  ['anime/otakudesu/detail', { slug: 'koori-jouheki-s2-sub-indo' }, (data) => assert.ok(data.title)],
+  ['manga/komiku/home', {}, (data) => assert.ok(data.ranking.length)],
+  ['manga/komiku/detail', { slug: 'archmage-restaurant' }, (data) => assert.ok(data.chapterCount > 0)],
+  ['downloader/tiktok', { url: tiktok }, (data) => assert.ok(data.videoUrl)],
+  ['downloader/tiktok2', { url: tiktok }, (data) => assert.ok(data.videoUrl)],
+  ['downloader/twitter', { url: 'https://twitter.com/NASAPersevere/status/1363929492138254340' },
+    (data) => assert.ok(data.media.some(({ extension }) => extension === 'mp4'))],
+  ['info/enka', { uid: '1810139094' }, (data) => assert.equal(data.uid, '1810139094')],
+  ['info/uptime', {}, (data) => assert.ok(data.uptimeSeconds >= 0)]
+];
+for (const [route, input, verify] of apiku) {
+  const segments = route.split('/');
+  const file = segments.pop();
+  checks.push([`ApiKu ${route}`, () => {
+    const [scrape] = Object.values(require(`../scrapers/apiku/${segments.join('/')}/scrape-${file}`));
+    return scrape({ timeout: 25000, cache: false, ...input });
+  }, (result) => verify(result.data)]);
+}
+
+checks.push(
+  ['API publik Wilayah.id provinsi', () => require('../scrapers/wilayah/scrape-provinsi').daftarProvinsi(options),
+    (result) => assert.ok(result.data.regions.some(({ code }) => code === '31'))],
+  ['API publik Wilayah.id kabupaten', () => require('../scrapers/wilayah/scrape-kabupaten').daftarKabupaten({ ...options, kode: '31' }),
+    (result) => assert.ok(result.data.regions.some(({ code }) => code === '31.71'))],
+  ['API publik Wilayah.id kecamatan', () => require('../scrapers/wilayah/scrape-kecamatan').daftarKecamatan({ ...options, kode: '31.71' }),
+    (result) => assert.ok(result.data.regions.some(({ code }) => code === '31.71.03'))],
+  ['API publik Wilayah.id desa', () => require('../scrapers/wilayah/scrape-desa').daftarDesa({ ...options, kode: '31.71.03' }),
+    (result) => assert.ok(result.data.regions.some(({ code, name }) => code === '31.71.03.1001' && name === 'Kemayoran'))],
+  ['API publik USGS', () => require('../scrapers/integrations/scrape-gempa-global').gempaGlobal(options),
+    (result) => assert.ok(result.data.events[0]?.magnitude >= 4.5)],
+  ['API publik World Bank', () => require('../scrapers/integrations/scrape-statistik-negara').statistikNegara({
+    ...options, country: 'IDN', indicator: 'SP.POP.TOTL', from: 2020, to: 2024, limit: 5
+  }), (result) => assert.ok(result.data.results.some(({ year, value }) => year === 2024 && value > 0))],
+  ['API publik Open-Meteo Geocoding', () => require('../scrapers/integrations/scrape-geocoding').geocoding({
+    ...options, name: 'Bandung', country: 'ID', limit: 3
+  }), (result) => assert.ok(result.data.results.some(({ countryCode, timezone }) => countryCode === 'ID' && timezone === 'Asia/Jakarta'))],
+  ['API publik NASA Image Library', () => require('../scrapers/integrations/scrape-foto-angkasa').fotoAngkasa({
+    ...options, q: 'Apollo 11', limit: 2
+  }), (result) => assert.ok(result.data.results.some(({ preview }) => preview?.startsWith('https://images-assets.nasa.gov/')))],
+  ['API publik Spaceflight News', () => require('../scrapers/integrations/scrape-berita-angkasa').beritaAngkasa({ ...options, q: 'NASA', limit: 2 }),
+    (result) => assert.ok(result.data.results.some(({ title, url }) => title && url.startsWith('https://')))]
+);
+
+const demoImage = 'https://upload.wikimedia.org/wikipedia/commons/7/70/Example.png';
+const demoBackground = 'https://placehold.co/400x300.png';
+const demoAvatar = { username: 'Demo', avatar: demoImage };
+const demoGuild = { ...demoAvatar, background: demoBackground, guildName: 'Demo Server', memberCount: 12 };
+const demoCard = { backgroundURL: demoBackground, avatarURL: demoImage, name: 'Demo' };
+const demoBirth = { tgl: 15, bln: 5, thn: 1995 };
+const demoPartners = { nama1: 'Budi', tgl1: 15, bln1: 5, thn1: 1995, nama2: 'Sari', tgl2: 20, bln2: 6, thn2: 1996 };
+const siputzxAdditions = {
+  'sticker/combot-search': { q: 'cat', page: 1 },
+  'info/cuaca': { q: 'pasiran jaya' },
+  'tools/kodepos': { form: 'pasiran jaya' },
+  'tools/ssweb': { url: 'https://example.com/', device: 'desktop', theme: 'light', fullPage: 'false' },
+  's/8font': { query: 'cartoon', page: 1 }, 's/applemusic': { query: 'duka', region: 'id' },
+  's/duckduckgo': { query: 'Node.js documentation' }, 's/mcpedl': { q: 'shaders' }, 's/otakotaku': { query: 'mahiru' },
+  's/pinterest': { query: 'batik pattern', type: 'image' }, 's/resep': { query: 'nasi goreng' },
+  's/youtube': { query: 'Big Buck Bunny Blender Foundation' },
+  'stalk/github': { user: 'nodejs' }, 'stalk/pinterest': { q: 'nasa' }, 'stalk/tiktok': { username: 'nasa' }, 'stalk/twitter': { user: 'NASA' },
+  'r/lahelu': {}, 'berita/tribunnews': {}, 'berita/cnbcindonesia': {},
+  'anime/oploverz-ongoing': {}, 'anime/oploverz-search': { query: 'One Piece' },
+  'ai/phi2': { prompt: 'Berapa 2 + 2? Jawab singkat.', temperature: 0.7 },
+  'primbon/nomorhoki': { phoneNumber: '12025550123' }, 'primbon/artinama': { nama: 'Budi' },
+  'primbon/zodiak': { zodiak: 'aries' }, 'primbon/kecocokan_nama_pasangan': { nama1: 'Budi', nama2: 'Sari' },
+  'primbon/rejeki_hoki_weton': demoBirth, 'primbon/sifat_usaha_bisnis': demoBirth,
+  'primbon/ramalanjodoh': demoPartners, 'primbon/ramalanjodohbali': demoPartners,
+  ...Object.fromEntries('affect beautiful blur circle delete facepalm greyscale invert'.split(' ').map((name) => [`canvas/${name}`, { image: demoImage }])),
+  'canvas/batslap': { image1: demoImage, image2: demoImage }, 'canvas/kiss': { image1: demoImage, image2: demoImage },
+  'canvas/darkness': { image: demoImage, amount: 50 }, 'canvas/captcha': { background: demoBackground, captchaKey: 'DEMO12' },
+  'canvas/gay': { nama: 'Demo', avatar: demoImage, num: 87 },
+  'canvas/security': { avatar: demoImage, background: demoBackground, createdTimestamp: 1672531200000, suspectTimestamp: 604800000, locale: 'en' },
+  'canvas/profile': { ...demoCard, rankName: 'Bronze', rankId: '0', exp: 500, requireExp: 1000, level: 3 },
+  'canvas/level-up': { ...demoCard, fromLevel: '0', toLevel: '1' },
+  'canvas/ship': { avatar1: demoImage, avatar2: demoImage, background: demoBackground, persen: 20 },
+  'canvas/spotify': { title: 'Demo Track', artist: 'Demo Artist', start: 15000, end: 200000, image: demoImage },
+  'canvas/sertifikat-tolol': { text: 'DEMO' },
+  'canvas/top': { background: demoBackground, usersData: JSON.stringify([{ top: 1, avatar: demoImage, tag: 'Demo', score: 10 }]) },
+  'canvas/welcomev1': { ...demoGuild, guildIcon: demoImage }, 'canvas/welcomev2': demoGuild, 'canvas/welcomev3': demoAvatar,
+  'canvas/welcomev4': { avatar: demoImage, background: demoBackground, description: 'Selamat Datang!' }, 'canvas/welcomev5': demoGuild,
+  'canvas/goodbyev1': { ...demoGuild, guildIcon: demoImage }, 'canvas/goodbyev2': demoGuild,
+  'canvas/goodbyev4': { avatar: demoImage, background: demoBackground, title: 'Sampai jumpa', description: 'Terima kasih!' }, 'canvas/goodbyev5': demoGuild
+};
+const categoryFolders = { d: 'downloader', m: 'maker', r: 'random', s: 'search' };
+for (const [route, input] of Object.entries(siputzxAdditions)) {
+  checks.push([`Siputzx Tambahan ${route}`, () => {
+    const [group, ...segments] = route.split('/');
+    const slug = segments.join('-').replace(/_/g, '-').replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+    const [scrape] = Object.values(require(`../scrapers/siputzx/${categoryFolders[group] ?? group}/scrape-${slug}`));
+    return scrape({ ...input, cache: false });
+  }, (result) => {
+    assert.equal(result.endpoint, route);
+    if (route.startsWith('canvas/') || route === 'tools/ssweb') {
+      assert.match(result.data.mimeType, /^image\/(?:png|jpeg|gif|webp)$/);
+      assert.ok(Buffer.from(result.data.base64, 'base64').length > 0);
+    }
+  }]);
+}
+
+for (const [name, check, verify] of checks) {
+  test(name, { timeout: 60000 }, async () => {
+    const result = await check();
+    assert.equal(result.status, true, JSON.stringify(result));
+    if (result.total !== undefined) assert.ok(result.total > 0, 'Contoh seharusnya menghasilkan setidaknya satu item');
+    if (name === 'Open Food Facts staging') assert.equal(result.found, true);
+    if (name === 'Wayback') assert.equal(result.found, true);
+    verify?.(result);
+  });
+}
