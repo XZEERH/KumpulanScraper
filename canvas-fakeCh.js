@@ -11,22 +11,6 @@
 #!/usr/bin/env node
 'use strict';
 
-/**
- * canvas-channelWhatsapp.js
- * Overlay profil Channel WhatsApp. Template sudah tertanam di file ini (base64),
- * jadi tidak perlu file canvasChannel.jpg di folder project.
- *
- * CLI (pipe):
- *   node canvas-channelWhatsapp.js "foto.jpg|Nama Channel|1200|Deskripsi channel|20-8-2026|200|456"
- *
- * CLI (argumen terpisah):
- *   node canvas-channelWhatsapp.js "foto.jpg", "Nama Channel", "1200", "Deskripsi channel", "08/8/26", "200", "456"
- *
- * Modul:
- *   const { renderChannel } = require('./canvas-channelWhatsapp');
- *   const buffer = await renderChannel({ profile, name, followers, description, created, reached, clean });
- */
-
 const fs = require('fs');
 const path = require('path');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
